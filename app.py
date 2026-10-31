@@ -31,6 +31,32 @@ try:  # 아이폰 HEIC 사진 지원 (선택)
 except Exception:
     pass
 
+def is_deployment_environment() -> bool:
+    """배포 환경 여부를 판별합니다. 필요하면 BLOG_APP_ENV로 명시적으로 덮어쓸 수 있습니다."""
+    forced = os.environ.get("BLOG_APP_ENV", "").strip().lower()
+    if forced in {"cloud", "deploy", "deployed", "production"}:
+        return True
+    if forced in {"local", "development", "dev"}:
+        return False
+
+    cloud_flags = (
+        os.environ.get("IS_STREAMLIT_CLOUD", ""),
+        os.environ.get("STREAMLIT_CLOUD", ""),
+        os.environ.get("STREAMLIT_RUNTIME_ENV", ""),
+    )
+    if any(value.strip().lower() in {"1", "true", "yes", "cloud", "production"} for value in cloud_flags):
+        return True
+
+    # Streamlit Community Cloud의 일반적인 앱 소스 경로
+    try:
+        app_path = Path(__file__).resolve()
+        if Path("/mount/src").exists() and Path("/mount/src") in app_path.parents:
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def get_default_folder() -> str:
     """이미지 폴더 기본값: 환경변수 → Streamlit Secrets → 프로젝트 내 images 폴더."""
     configured = os.environ.get("BLOG_IMAGE_FOLDER", "").strip()
@@ -833,19 +859,25 @@ with st.sidebar:
                         st.error(f"Groq 모델/API 테스트 실패: HTTP {check.status_code} — {check.text[:500]}")
                 except requests.RequestException as e:
                     st.error(f"Groq 연결 테스트 중 네트워크 오류: {e}")
-    folder = st.text_input(
-        "이미지 폴더 경로 (선택)",
-        value=get_default_folder(),
-        placeholder="예: ./images 또는 /mount/data/blog-images",
-        help="내 PC 실행 시 로컬 폴더 경로를 입력할 수 있습니다. Streamlit Community Cloud에서는 PC의 폴더에 접근할 수 없으므로 사진 업로드를 이용하거나 GitHub 저장소의 images 폴더를 사용하세요.",
-    )
+    # 로컬 실행에서만 폴더 경로 입력과 다시 읽기 버튼을 노출합니다.
+    # 배포 환경에서는 해당 컨트롤을 숨기고 업로드 이미지 또는 저장소의 images 폴더를 사용합니다.
+    deployment_mode = is_deployment_environment()
+    folder = get_default_folder()
+    if not deployment_mode:
+        folder = st.text_input(
+            "이미지 폴더 경로 (선택)",
+            value=get_default_folder(),
+            placeholder="예: ./images 또는 /Users/사용자명/Pictures/blog",
+            help="로컬 PC의 이미지 폴더 경로를 입력할 수 있습니다.",
+        )
+
     crop_ratio = st.selectbox("블로그 사진 크롭", ["원본 유지", "4:3 가로", "3:4 세로", "4:5 세로", "1:1 정사각형", "16:9 가로"], index=0,
                               help="원본 유지를 권장합니다. 비율을 선택하면 사진 중앙 기준으로 잘라 미리보기와 내보내기에 적용합니다. 가장자리의 피사체가 잘릴 수 있습니다.")
     if st.session_state.get("crop_ratio_prev", "원본 유지") != crop_ratio:
         st.session_state.pop("imgs", None)
         st.session_state.pop("analysis", None)
         st.session_state.crop_ratio_prev = crop_ratio
-    if st.button("이미지 다시 읽기"):
+    if not deployment_mode and st.button("이미지 다시 읽기"):
         st.session_state.pop("imgs", None)
         st.session_state.pop("analysis", None)
 
