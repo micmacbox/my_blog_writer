@@ -65,13 +65,5 @@ Groq의 기본 GPT-OSS 모델은 텍스트 전용으로 처리합니다. 사진�
 
 현재 코드를 유지하려면 GitHub 저장소를 **Streamlit Community Cloud**에 연결하는 방식이 가장 간단합니다. Vercel을 꼭 사용하려면 화면과 서버 구조를 Next.js 기반으로 재구성하는 별도 마이그레이션이 필요합니다.
 
-## GitHub 업로드
-
-```bash
-git init
-git add .
-git commit -m "Prepare optimized Streamlit blog writer"
-git branch -M main
-git remote add origin https://github.com/계정명/저장소명.git
-git push -u origin main
-```
+## 로컬 실행
+python3 -m streamlit run app.py
