@@ -441,9 +441,12 @@ DEFAULT_USER_STYLE_PROFILE = """[기본 문체: 사용자가 제공한 블로그
 - 해시태그는 본문과 관련된 지역·업종·상호·방문 목적을 중심으로 작성한다. 같은 키워드를 과하게 반복하지 않는다.
 
 첨부된 블로그 화면 캡처에서 보이는 구성 특징
-- 대표 사진/썸네일로 글의 주제를 먼저 보여주고, 본문은 사진을 여러 장 배치하면서 짧은 설명과 개인 감상을 번갈아 넣는 이미지 중심 구성이다.
-- 긴 설명문을 연속해서 쓰기보다 사진 사이에 짧은 문단을 배치하고, 필요한 경우에만 '이용팁', '총평', 영업시간·위치 등 정보 섹션을 둔다.
-- 글 끝부분에는 이용 정보와 지도/위치 정보가 모이는 경우가 많다. 입력 정보가 없으면 임의로 만들지 않는다.
+- 대표 사진/썸네일에 핵심 주제를 짧고 크게 넣고, 본문은 사진을 충분히 배치하는 이미지 중심 구성이다.
+- 서론에서 방문 계기와 장소에 대한 첫인상을 짧게 풀고, 본론에서는 외관·내부·시설/분위기·이용 과정·메뉴/서비스 경험을 사진 순서에 맞춰 소개한다.
+- 사진 사이에는 사진에 실제로 담긴 내용을 설명하는 짧은 문단을 둔다. 한두 문장짜리 짧은 감상과 조금 더 긴 설명을 섞어 모바일에서 읽기 편하게 만든다.
+- 음식점 글은 메뉴판 사진을 음식 사진보다 먼저 배치한다. 메뉴판/가격표 사진이 있으면 메뉴 소개 직전에 먼저 보여주고, 그다음 전체 상차림·메뉴별 근접 사진 순서로 구성한다. 메뉴판 사진이 없으면 메뉴판을 본 것처럼 쓰지 않는다.
+- 결론은 반드시 '이용팁'과 '총평'을 별도 소제목으로 나눈다. 이용팁에는 확인된 주차·예약·웨이팅·주문·위치 정보를, 총평에는 실제 경험을 바탕으로 추천 대상과 아쉬운 점을 간결하게 적는다.
+- 글 끝부분에는 주소·영업시간 등 이용 정보와 지도/위치 정보가 모일 수 있다. 입력 정보가 없으면 임의로 만들지 않는다.
 - 캡처에 보이는 스티커/장식 이미지는 실제 이미지 폴더에 존재하는 경우에만 사진 마커로 배치한다. 장식 이미지를 새로 지어내거나 음식 사진으로 대체하지 않는다.
 
 피해야 할 것
@@ -514,18 +517,26 @@ WRITE_SYSTEM = """너는 네이버 블로그 맛집/장소 후기 전문 작가�
 - 레퍼런스의 문장·내용을 그대로 복사하지 않는다. 스타일만 참고한다.
 
 [네이버 SEO]
-- 제목: 25~40자, 핵심 키워드(지역+업종/메뉴)를 앞쪽에 배치. 과장·낚시 금지.
-- 메인 키워드는 첫 문단에 1회 이상, 본문 전체에 6~8회 자연스럽게. 키워드 도배 금지.
+- 제목은 25~40자 안팎으로 작성하고, 사용자가 입력한 메인 키워드를 제목 앞쪽에 정확히 포함한다. 과장·낚시 금지.
+- 메인 키워드가 입력되면 그 문구를 띄어쓰기·철자·순서까지 한 글자도 바꾸지 않는 '정확 일치 키워드'로 취급한다.
+- 제목에 사용한 핵심 키워드 문구를 본문에 최소 5회 이상 정확히 동일한 형태로 노출한다. 첫 문단에 반드시 1회 넣고, 본문 중간과 후반에 문맥에 맞게 분산한다. 조사나 수식어를 붙이는 것은 가능하지만 키워드 자체의 띄어쓰기와 철자는 변경하지 않는다.
+- 본문 작성 후 제목의 키워드 문구가 본문에 정확히 몇 회 등장하는지 자체 점검한다. 5회 미만이면 자연스러운 문장에 추가해 기준을 충족한다. 반복을 위해 어색한 문장을 만들거나 키워드만 나열하지 않는다.
+- 메인 키워드가 비어 있으면 업체명·지역·업종/메뉴에서 대표 키워드를 정하고, 제목에 넣은 정확한 문구를 본문에 최소 5회 동일하게 사용한다.
 - 본문은 사진 수와 입력 정보에 맞춰 충분히 작성하되, 글자 수를 채우려고 같은 말을 반복하지 않는다.
-- 네이버 에디터에 바로 붙여넣을 수 있도록 마크다운 제목 기호(#, **)를 사용하지 않는다. 소제목은 사용자 문체에 어울릴 때만 사용한다.
-- 도입 → 방문/이용 과정 → 실제 경험 → 이용 팁/총평 흐름을 기본으로 삼되, 자료에 맞게 순서를 조절하고 모든 글을 똑같은 템플릿으로 만들지 않는다.
+- 네이버 에디터에 바로 붙여넣을 수 있도록 마크다운 제목 기호(#, **)를 사용하지 않는다. 소제목은 짧고 명확하게 사용한다.
+- 전체 구조는 반드시 '서론 → 본론 → 결론'으로 구성한다. 결론 안에서 '이용팁'과 '총평'을 각각 별도 소제목으로 분리한다.
 - 최상급·단정 표현("무조건", "인생 맛집", 효능 주장)은 피하고 경험 기반으로 서술한다.
 - 마지막에 해시태그 8~12개.
+- 메인 키워드와 서브 키워드는 검색 의도에 맞게 사용하되, 키워드 목록을 나열하지 말고 실제 정보가 담긴 문장에 포함한다.
+- 서브 키워드는 문맥에 맞을 때만 사용하고 억지로 모두 넣지 않는다. 동일 키워드를 한 문단에 몰아넣지 않는다.
+- 사용자가 선택한 글 유형/검색 의도를 우선해 검색자가 궁금해할 정보(위치·가격·메뉴·과정·장단점·추천 대상)를 빠뜨리지 않는다.
+- 확인되지 않은 검색량, 인기 순위, 방문자 수, 영업 정보, 주차 가능 여부를 추정하지 않는다. 검색 상위 노출이나 순위를 보장하는 표현을 쓰지 않는다.
 
 [이미지 배치]
 - 사진은 [[IMG_01]] 처럼 마커를 단독 한 줄로 넣는다. 분석표에서 usable=true인 사진은 가급적 모두, 각각 정확히 한 번만 사용한다.
-- 흐름은 대체로 외관 → 내부 → 메뉴판 → 음식 → 마무리 순으로, 같은 종류 사진은 연속 3장까지만.
-- 사진 직후에는 그 사진 내용과 맞는 1~3문장을 쓴다. 사진 설명에 없는 맛·재료·가격을 지어내지 않는다.
+- 흐름은 대체로 외관 → 내부/시설 → 메뉴판/가격표 → 음식 전체샷 → 음식별 근접샷 → 마무리 순으로 구성한다. 음식 사진보다 메뉴판 사진을 반드시 먼저 배치한다(메뉴판 사진이 실제로 제공된 경우).
+- 같은 종류 사진은 연속 3장까지만 배치하고, 사진 직후에는 그 사진 내용과 맞는 1~3문장을 쓴다. 사진 설명에 없는 맛·재료·가격을 지어내지 않는다.
+- 메뉴판 사진을 배치한 뒤에 메뉴명과 가격을 소개하고, 음식 사진에서는 비주얼·양·식감·맛 등 제공된 메모나 사진으로 뒷받침되는 부분만 서술한다.
 
 [사실 관계]
 - 주소·영업시간·전화·가격은 입력 정보나 사진에서 확인되는 것만 쓴다. 없으면 해당 항목은 "[확인 필요]"로 표시한다.
@@ -536,12 +547,92 @@ WRITE_SYSTEM = """너는 네이버 블로그 맛집/장소 후기 전문 작가�
 ===TITLE===
 (제목)
 ===BODY===
+서론
+(방문 계기와 첫인상)
+
+본론
+(외관·내부·메뉴판·음식/서비스 경험을 사진 순서에 맞춰 전개)
+
+결론
+이용팁
+(확인된 실용 정보)
+
+총평
+(솔직한 최종 감상과 추천 대상)
 (본문, 이미지 마커 포함)
 ===TAGS===
 #태그1 #태그2 ...
 ===KEYWORDS===
 (사용한 핵심 키워드 쉼표 구분)"""
 
+
+
+def _clean_for_seo(text: str) -> str:
+    return re.sub(r"\[\[IMG_\d+\]\]", " ", text or "")
+
+
+def audit_blog_seo(result: dict, form: dict, images: dict | None = None) -> dict:
+    """발행 전 구조·키워드 점검. 네이버 검색 순위 점수가 아닌 원고 작성 품질 체크다."""
+    title = (result.get("title") or "").strip()
+    body = _clean_for_seo(result.get("body") or "")
+    tags = (result.get("tags") or "").strip()
+    keyword = (form.get("keyword") or "").strip()
+    paragraphs = [x.strip() for x in re.split(r"\n\s*\n", body) if x.strip() and not MARK.match(x.strip())]
+    plain = re.sub(r"\s+", " ", body).strip()
+    exact_count = body.count(keyword) if keyword else 0
+    first_part = plain[:220]
+    keyword_paras = sum(1 for para in paragraphs if keyword and keyword in para)
+    title_ok = bool(title and (keyword in title if keyword else True))
+    count_ok = exact_count >= 5 if keyword else True
+    intro_ok = bool(keyword and keyword in first_part) if keyword else bool(plain)
+    spread_ok = keyword_paras >= min(3, max(1, len(paragraphs))) if keyword else True
+    section_ok = all(x in body for x in ["서론", "본론", "결론", "이용팁", "총평"])
+    tag_count = len(re.findall(r"#[^\s#]+", tags))
+    tag_ok = 5 <= tag_count <= 15
+    length = len(re.sub(r"\s", "", plain))
+    length_ok = length >= 700
+    # 동일 문장 반복은 과도한 반복의 신호만 제공한다(문장 중복 자체가 검색 순위 요소라는 뜻은 아님).
+    sentences = [x.strip() for x in re.split(r"[.!?。\n]+", plain) if len(x.strip()) >= 15]
+    duplicates = len(sentences) - len(set(sentences))
+    duplication_ok = duplicates == 0
+    photo_ok = True
+    if images:
+        used = re.findall(r"\[\[(IMG_\d+)\]\]", result.get("body", ""))
+        photo_ok = len(used) == len(set(used)) and all(x in images for x in used)
+    checks = [
+        ("제목에 메인 키워드 포함", title_ok, 10, "제목에 입력한 키워드가 정확히 들어갔는지 확인"),
+        ("본문 정확 일치 키워드 5회 이상", count_ok, 15, f"현재 {exact_count}회" if keyword else "메인 키워드 미입력"),
+        ("첫 부분에 메인 키워드 포함", intro_ok, 10, "도입부에서 주제가 바로 드러나는지 확인"),
+        ("키워드 문단별 분산", spread_ok, 10, f"키워드가 포함된 문단 {keyword_paras}개" if keyword else "메인 키워드 미입력"),
+        ("서론·본론·결론 및 이용팁·총평", section_ok, 15, "요청한 글 구조 확인"),
+        ("해시태그 5~15개", tag_ok, 5, f"현재 {tag_count}개"),
+        ("본문 정보량", length_ok, 10, f"공백 제외 약 {length:,}자 (700자 기준은 내부 점검용)"),
+        ("동일 문장 반복 없음", duplication_ok, 10, f"중복 의심 문장 {duplicates}개"),
+        ("사진 마커 중복·오류 없음", photo_ok, 5, "사진 배치 마커 확인"),
+        ("실제 경험·구체 정보 보강", bool(form.get("memo") or form.get("menu") or form.get("reason")), 10, "입력한 경험 정보가 충분한지 직접 검토"),
+    ]
+    score = sum(weight for _, ok, weight, _ in checks if ok)
+    return {"score": score, "checks": checks, "keyword_count": exact_count, "keyword_paragraphs": keyword_paras, "body_length": length, "title_length": len(title)}
+
+
+def suggest_title_patterns(form: dict, current_title: str) -> list[str]:
+    """메인 키워드를 보존하는 제목 초안. 실제 검색량·경쟁도 예측은 하지 않는다."""
+    kw = (form.get("keyword") or "").strip()
+    store = (form.get("store") or "").strip()
+    region = (form.get("region") or "").strip()
+    if not kw:
+        return [current_title] if current_title else []
+    suffixes = ["방문 후기", "솔직 후기", "메뉴와 분위기 정리", "위치와 이용팁까지"]
+    candidates = [f"{kw} {store} {suffix}".strip() for suffix in suffixes[:2] if store]
+    candidates += [f"{kw} {suffix}" for suffix in suffixes]
+    if region and region not in kw:
+        candidates.append(f"{kw} {region} 방문 후기")
+    out=[]
+    for title in [current_title] + candidates:
+        title=re.sub(r"\s+", " ", title).strip()
+        if title and title not in out:
+            out.append(title)
+    return out[:6]
 
 def build_ref_blocks(files):
     blocks = []
@@ -560,6 +651,9 @@ def generate(client, model, ref_blocks, form, analysis, style_profile="", prev=N
 - 업체명: {form['store'] or '(미입력 — 사진/메뉴판에서 확인되면 사용)'}
 - 지역: {form['region'] or '(미입력)'}
 - 메인 키워드: {form['keyword'] or '(없음 — 지역+업종/메뉴로 자동 선정)'}
+- 서브 키워드: {form.get('subkeywords') or '(미입력 — 억지로 만들지 말 것)'}
+- 글 유형: {form.get('content_type', '자동 선택')}
+- 검색 의도: {form.get('search_intent', '자동 선택')}
 - 방문 인원: {form['party']}
 - 주문 메뉴: {form['menu']}
 - 방문 계기: {form['reason']}
@@ -778,7 +872,7 @@ if "style_profile_editor" not in st.session_state:
     st.session_state.style_profile_editor = st.session_state.style_profile
 
 if style_mode == "내 문체 (기본)":
-    st.info("기본 문체가 선택되어 있습니다. 제공해 주신 모란 캠핑포차 원고의 편한 구어체, 짧은 문단, 솔직한 감상과 가벼운 농담을 기본값으로 사용합니다. 첨부한 레퍼런스는 이번 원고의 문체에 반영하지 않습니다.")
+    st.info("기본 문체가 선택되어 있습니다. 제공해 주신 글의 편한 구어체와 짧은 문단에 더해, 사진 중심의 긴 후기 구성·서론/본론/결론·이용팁/총평 분리·메뉴판 선배치를 기본값으로 사용합니다. 첨부한 레퍼런스는 이번 원고의 문체에 반영하지 않습니다.")
     with st.expander("내 기본 문체 프로필 보기"):
         st.text_area("기본 문체 프로필", value=DEFAULT_USER_STYLE_PROFILE, height=260, disabled=True, key="default_style_profile_view")
     active_style_profile = DEFAULT_USER_STYLE_PROFILE
@@ -819,7 +913,11 @@ st.subheader("2. 방문 정보")
 c1, c2, c3 = st.columns(3)
 store = c1.text_input("업체명 (선택)")
 region = c2.text_input("지역 (선택)", placeholder="예: 성수동")
-keyword = c3.text_input("메인 키워드 (선택)", placeholder="예: 성수 파스타 맛집")
+keyword = c3.text_input("메인 키워드 (선택)", placeholder="예: 성수 파스타 맛집", help="제목에 넣을 핵심 문구를 입력하세요. 입력한 문구는 띄어쓰기까지 동일하게 본문에 5회 이상 반영합니다.")
+seo1, seo2, seo3 = st.columns([2, 2, 2])
+subkeywords = seo1.text_input("서브 키워드 (선택)", placeholder="예: 성수동 데이트, 성수 파스타")
+content_type = seo2.selectbox("글 유형", ["자동 선택", "맛집", "카페", "피부과·뷰티", "방탈출·체험", "제품 리뷰", "여행·숙소", "기타"])
+search_intent = seo3.selectbox("검색 의도", ["자동 선택", "방문 전 정보 탐색", "가격·메뉴 비교", "실제 방문 후기", "예약·이용 방법", "제품 구매 전 비교"])
 
 party = st.radio("방문 인원", ["혼자", "2명", "3~4명", "5명 이상"], horizontal=True)
 menu = st.text_area("주문 메뉴", placeholder="예: 트러플 크림 파스타, 감바스, 아이스 아메리카노 2잔")
@@ -828,7 +926,7 @@ ftc = st.radio("공정위 표시 유형", ["내돈내산", "기자단", "체험�
 provided = st.text_input("제공 내역 (기자단/체험단일 때)", placeholder="예: 2인 식사 제공") if ftc != "내돈내산" else ""
 memo = st.text_area("추가로 기억나는 점", placeholder="예: 웨이팅 20분, 직원이 친절, 주차는 불편, 파스타 면이 쫄깃")
 
-form = dict(store=store, region=region, keyword=keyword, party=party, menu=menu, reason=reason, ftc=ftc, provided=provided, memo=memo)
+form = dict(store=store, region=region, keyword=keyword, subkeywords=subkeywords, content_type=content_type, search_intent=search_intent, party=party, menu=menu, reason=reason, ftc=ftc, provided=provided, memo=memo)
 
 
 def make_client(provider_name, key):
@@ -916,6 +1014,17 @@ if res:
         st.metric("본문 글자 수(공백 제외)", f"{body_chars:,}")
         used = used_ids(res["body"])
         st.metric("배치된 사진", f"{len(used)} / {len(imgs_by_id)}")
+        seo_report = audit_blog_seo(res, f, imgs_by_id)
+        st.divider()
+        st.markdown("**네이버 SEO 발행 전 점검**")
+        st.metric("원고 점검 점수", f"{seo_report['score']} / 100", help="네이버의 공식 검색 순위 점수가 아니라, 프로젝트 내부의 원고 품질 체크 점수입니다.")
+        st.caption(f"메인 키워드 정확 일치: {seo_report['keyword_count']}회 · 키워드 포함 문단: {seo_report['keyword_paragraphs']}개 · 제목: {seo_report['title_length']}자")
+        with st.expander("SEO 점검 항목 자세히 보기", expanded=True):
+            for label, ok, weight, detail in seo_report["checks"]:
+                st.write(("✅ " if ok else "⚠️ ") + f"{label} ({weight}점) — {detail}")
+        with st.expander("제목 후보 보기"):
+            for title_candidate in suggest_title_patterns(f, res.get("title", "")):
+                st.write("• " + title_candidate)
         skipped = [k for k in imgs_by_id if k not in used]
         if skipped:
             st.caption("미사용: " + ", ".join(skipped))
