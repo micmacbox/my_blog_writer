@@ -1,0 +1,6 @@
+streamlit>=1.40,<2.0
+google-genai>=1.0
+Pillow>=10.0
+pillow-heif>=0.16
+requests>=2.31
+PyMuPDF>=1.24
