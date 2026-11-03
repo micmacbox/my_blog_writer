@@ -888,6 +888,22 @@ uploaded_images = st.file_uploader(
     help="Streamlit Community Cloud에서는 이 업로드 방식을 권장합니다. 사진은 분석·내보내기 전에 크기를 줄이며 GIF는 움직임을 유지합니다.",
 )
 
+# 일부 모바일 브라우저의 사진 선택창은 다중 선택을 지원하지 않거나 한 장만
+# 앱으로 전달한다. 보조 단일 업로더들을 제공해 여러 장을 순서대로 추가할 수 있게 한다.
+mobile_image_slots = []
+with st.expander("모바일에서 사진을 여러 장 추가하려면 여기를 누르세요"):
+    st.caption("사진 선택창에서 한 장씩 선택해도 됩니다. 선택한 사진은 위 업로드와 함께 처리됩니다.")
+    for slot_index in range(1, 9):
+        selected_image = st.file_uploader(
+            f"추가 사진 {slot_index}",
+            type=["jpg", "jpeg", "png", "webp", "heic", "heif", "gif"],
+            accept_multiple_files=False,
+            key=f"mobile_image_slot_{slot_index}",
+        )
+        if selected_image is not None:
+            mobile_image_slots.append(selected_image)
+uploaded_images = list(uploaded_images or []) + mobile_image_slots
+
 st.subheader("1. 작성 문체")
 style_mode = st.radio(
     "어떤 문체로 작성할까요?",
