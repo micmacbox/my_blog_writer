@@ -903,25 +903,37 @@ with st.sidebar:
         st.session_state.pop("imgs", None)
         st.session_state.pop("analysis", None)
 
+def mark_image_upload_changed():
+    st.session_state.image_upload_changed = True
+
+
 uploaded_images = st.file_uploader(
     "사진 업로드",
-    type=["jpg", "jpeg", "png", "webp", "heic", "heif", "gif"],
+    type="image",
     accept_multiple_files=True,
     key="blog_image_uploader",
-    help="Android 갤러리에서 사진을 여러 장 선택하고 완료를 누르세요. 선택된 사진은 아래 미리보기에 표시됩니다.",
+    on_change=mark_image_upload_changed,
+    help="Android 갤러리에서 사진을 여러 장 선택하고 완료를 누르세요. 첨부된 파일명은 아래 목록에 표시됩니다.",
 )
 uploaded_images = list(uploaded_images or [])
+image_upload_changed = st.session_state.pop("image_upload_changed", False)
+if image_upload_changed or "upload_signature" not in st.session_state:
+    with st.spinner("첨부된 사진을 불러오는 중..."):
+        upload_signature = tuple(
+            (f.name, len(raw := f.getvalue()), hashlib.sha256(raw).hexdigest())
+            for f in uploaded_images
+        )
+else:
+    upload_signature = st.session_state.upload_signature
+if st.session_state.get("upload_signature") != upload_signature:
+    st.session_state.pop("imgs", None)
+    st.session_state.pop("analysis", None)
+    st.session_state.upload_signature = upload_signature
+
 if uploaded_images:
     st.caption(f"선택된 사진: {len(uploaded_images)}장")
-    preview_columns = st.columns(2)
-    for image_index, uploaded_image in enumerate(uploaded_images):
-        try:
-            preview = to_jpeg(io.BytesIO(uploaded_image.getvalue()), 480, quality=72)
-            with preview_columns[image_index % len(preview_columns)]:
-                st.image(preview, caption=f"{image_index + 1}. {uploaded_image.name}", use_container_width=True)
-        except Exception as e:
-            with preview_columns[image_index % len(preview_columns)]:
-                st.warning(f"미리보기를 표시하지 못했습니다: {uploaded_image.name} ({e})")
+    for image_index, uploaded_image in enumerate(uploaded_images, 1):
+        st.text(f"{image_index:02d}. {uploaded_image.name}")
 
 st.subheader("1. 작성 문체")
 style_mode = st.radio(
@@ -1007,15 +1019,6 @@ def bind_status(live):
     TICK = lambda n: live.caption(f"✍️ 응답 수신 중... {n:,}자")
     WAIT = lambda sec: live.caption(f"⏳ 재시도 대기 중... {sec}초 남음")
 
-
-upload_signature = tuple(
-    (f.name, len(raw := f.getvalue()), hashlib.sha256(raw).hexdigest())
-    for f in uploaded_images
-)
-if st.session_state.get("upload_signature") != upload_signature:
-    st.session_state.pop("imgs", None)
-    st.session_state.pop("analysis", None)
-    st.session_state.upload_signature = upload_signature
 
 if st.button("원고 생성", type="primary"):
     if not api_key:
