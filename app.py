@@ -734,7 +734,27 @@ def render_preview(res, imgs_by_id, form):
     st.caption(disclosure_text(form))
 
 
-def placement_items(res, imgs_by_id):
+def seo_image_filename(seq, image, form):
+    """Use the main keyword and analyzed scene in a short, descriptive export name."""
+    def compact(value, limit):
+        value = re.sub(r"[^가-힣A-Za-z0-9]+", "", str(value or ""))
+        return value[:limit]
+
+    keyword = compact(form.get("keyword") or form.get("menu") or form.get("store") or "사진", 32)
+    category = image.get("category", "")
+    scene_by_category = {
+        "외관": "외관", "입구": "입구", "내부": "내부", "메뉴판": "메뉴판",
+        "음식": "클로즈업", "음료": "음료", "사이드": "사이드메뉴",
+        "테이블세팅": "한상차림", "먹는장면": "먹는장면", "영수증": "영수증",
+    }
+    scene = scene_by_category.get(category, "사진")
+    menu_guess = compact(image.get("menu_guess"), 16)
+    if menu_guess and menu_guess not in keyword:
+        scene = f"{menu_guess}{scene}"
+    return f"{seq:02d}_{keyword}{scene}{image.get('out_ext', '.jpg')}"
+
+
+def placement_items(res, imgs_by_id, form):
     """미리보기 본문에 실제로 등장하는 순서대로 사진 번호와 파일명을 만든다."""
     items = []
     for line in res["body"].splitlines():
@@ -742,22 +762,20 @@ def placement_items(res, imgs_by_id):
         if m and m.group(1) in imgs_by_id:
             im = imgs_by_id[m.group(1)]
             seq = len(items) + 1
-            filename = f"{seq:02d}_{Path(im['name']).stem}{im.get('out_ext', '.jpg')}"
+            filename = seo_image_filename(seq, im, form)
             items.append({"seq": seq, "iid": m.group(1), "image": im, "filename": filename})
     return items
 
 
 def build_text(res, imgs_by_id, form):
     out = [res["title"], "", disclosure_text(form), ""]
-    seq = 0
+    items = iter(placement_items(res, imgs_by_id, form))
     for line in res["body"].splitlines():
         m = MARK.match(line)
         if m:
-            im = imgs_by_id.get(m.group(1))
-            if im:
-                seq += 1
-                filename = f"{seq:02d}_{Path(im['name']).stem}{im.get('out_ext', '.jpg')}"
-                out.append(f"[사진 {seq:02d} : {filename}]")
+            if m.group(1) in imgs_by_id:
+                item = next(items)
+                out.append(f"[사진 {item['seq']:02d} : {item['filename']}]")
             else:
                 out.append(f"[사진 : 원본 이미지 확인 필요 - {m.group(1)}]")
         else:
@@ -784,7 +802,7 @@ def build_html(res, imgs_by_id, form):
 def build_zip(res, imgs_by_id, form):
     """원고의 사진 번호와 ZIP 안 이미지 파일명이 미리보기 순서로 일치하도록 저장합니다."""
     buf = io.BytesIO()
-    items = placement_items(res, imgs_by_id)
+    items = placement_items(res, imgs_by_id, form)
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("원고.txt", build_text(res, imgs_by_id, form))
         z.writestr("원고.html", build_html(res, imgs_by_id, form))
@@ -796,7 +814,7 @@ def build_zip(res, imgs_by_id, form):
 def build_naver_zip(res, imgs_by_id, form):
     """미리보기 순서대로 사진과 원고를 묶습니다. 별도 배치순서표는 만들지 않습니다."""
     buf = io.BytesIO()
-    items = placement_items(res, imgs_by_id)
+    items = placement_items(res, imgs_by_id, form)
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("원고.txt", build_text(res, imgs_by_id, form))
         for item in items:
@@ -1070,7 +1088,11 @@ if st.button("원고 생성", type="primary"):
 
 res = st.session_state.get("result")
 if res:
-    imgs_by_id = {im["id"]: im for im in st.session_state.get("imgs", [])}
+    analysis_by_id = st.session_state.get("analysis", {})
+    imgs_by_id = {
+        im["id"]: {**im, **analysis_by_id.get(im["id"], {})}
+        for im in st.session_state.get("imgs", [])
+    }
     f = st.session_state.form
     st.divider()
     st.subheader("3. 결과")
@@ -1102,7 +1124,7 @@ if res:
         with st.expander("이미지 분석 결과"):
             st.json(st.session_state.get("analysis", {}))
 
-        st.download_button("📦 네이버 업로드용 ZIP", build_naver_zip(res, imgs_by_id, f), "네이버_업로드용.zip", "application/zip", help="미리보기에서 보이는 순서대로 원고의 사진 번호와 ZIP 안 사진 파일명을 맞춰 담습니다.")
+        st.download_button("📦 네이버 업로드용 ZIP", build_naver_zip(res, imgs_by_id, f), "네이버_업로드용.zip", "application/zip", help="미리보기 순서에 맞춰 사진 번호를 붙이고, 메인 키워드와 사진 장면을 반영한 파일명으로 저장합니다.")
         st.download_button("📦 원고+이미지 ZIP (전체)", build_zip(res, imgs_by_id, f), "blog_draft.zip", "application/zip")
         st.download_button("📄 텍스트(.txt)", build_text(res, imgs_by_id, f), "원고.txt")
         st.download_button("🌐 HTML(.html)", build_html(res, imgs_by_id, f), "원고.html", "text/html")
