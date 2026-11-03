@@ -71,9 +71,9 @@ def get_default_folder() -> str:
     return str(bundled_images) if bundled_images.is_dir() else ""
 
 DEFAULT_MODEL = "gemini-3.1-flash-lite"
-PROVIDER_MODELS = {
-    "Gemini": "gemini-3.1-flash-lite",
-    "Groq": "openai/gpt-oss-20b",
+PROVIDER_MODEL_OPTIONS = {
+    "Gemini": ["gemma-4-31b-it", "gemini-3.1-flash-lite", "gemini-3.6-flash"],
+    "Groq": [],
 }
 PROVIDER_URLS = {
     "Groq": "https://api.groq.com/openai/v1/chat/completions",
@@ -276,7 +276,7 @@ def _part_to_openai_blocks(part):
 
 
 def _openai_compatible_call(provider, api_key, model, system, content, max_tokens, label):
-    """Groq Chat Completions 호출. GPT-OSS 텍스트 모델에 맞춰 content를 항상 문자열로 보낸다."""
+    """Groq Chat Completions 호출. 텍스트 모델에 맞춰 content를 항상 문자열로 보낸다."""
     if provider != "Groq":
         raise RuntimeError(f"지원하지 않는 AI 제공자입니다: {provider}")
 
@@ -290,7 +290,7 @@ def _openai_compatible_call(provider, api_key, model, system, content, max_token
             inline = getattr(item, "inline_data", None)
             mime = getattr(inline, "mime_type", None) or "첨부파일"
             text_parts.append(
-                f"[첨부파일 생략: {mime}. 현재 선택된 Groq GPT-OSS 모델은 텍스트 전용이므로 이미지/PDF 내용을 분석하지 않습니다.]"
+                f"[첨부파일 생략: {mime}. 현재 선택된 Groq 모델은 텍스트 전용이므로 이미지/PDF 내용을 분석하지 않습니다.]"
             )
         elif isinstance(item, dict):
             # 혹시 이전 멀티모달 형식이 넘어오더라도 dict/list 자체를 API에 전달하지 않는다.
@@ -328,7 +328,7 @@ def _openai_compatible_call(provider, api_key, model, system, content, max_token
         if response.status_code in (401, 403):
             hint = "Groq API 키 인증/권한 오류입니다. console.groq.com/keys에서 발급한 키인지 확인해 주세요."
         elif response.status_code == 400:
-            hint = "Groq 요청 형식 또는 모델 지원 문제입니다. 기본 모델 ID(openai/gpt-oss-20b)로 먼저 테스트해 주세요."
+            hint = "Groq 요청 형식 또는 모델 지원 문제입니다. 입력한 모델 ID가 Groq에서 제공되는지 확인해 주세요."
         elif response.status_code == 429:
             hint = "무료 요청 한도 또는 분당 사용량 제한일 수 있습니다. 잠시 후 재시도해 주세요."
         elif response.status_code in (500, 502, 503, 504):
@@ -403,7 +403,7 @@ def analyze_images(client, model, imgs):
     """이미지를 작은 묶음으로 분석하고, 묶음마다 session_state에 즉시 저장한다."""
     results = dict(st.session_state.get("analysis", {}))
     if client.get("provider") == "Groq":
-        # 현재 기본 Groq GPT-OSS 텍스트 모델에는 이미지 내용을 보내지 않는다.
+        # Groq 제공자는 텍스트 모델만 사용하므로 이미지 내용을 보내지 않는다.
         # 이미지 내용을 본 것처럼 추측하지 않고 파일명만 보존한다.
         for im in imgs:
             results.setdefault(im["id"], {
@@ -835,14 +835,32 @@ with st.sidebar:
         except Exception:
             key_default = ""
     api_key = st.text_input(key_label, value=key_default, type="password", key=f"api_key_{provider}").strip()
-    model = st.text_input("모델 ID", value=PROVIDER_MODELS[provider], key=f"model_{provider}", help="기본 모델을 사용하거나 해당 제공자의 모델 ID로 변경할 수 있습니다.")
+    model_choice = st.selectbox(
+        "모델",
+        [*PROVIDER_MODEL_OPTIONS[provider], "직접 입력"],
+        index=(PROVIDER_MODEL_OPTIONS[provider].index(DEFAULT_MODEL)
+               if provider == "Gemini" and DEFAULT_MODEL in PROVIDER_MODEL_OPTIONS[provider]
+               else len(PROVIDER_MODEL_OPTIONS[provider])),
+        key=f"model_choice_{provider}",
+    )
+    if model_choice == "직접 입력":
+        model = st.text_input(
+            "모델 ID 직접 입력",
+            value=st.session_state.get(f"custom_model_{provider}", ""),
+            key=f"custom_model_{provider}",
+            placeholder="예: gemini-3.1-flash-lite",
+        ).strip()
+    else:
+        model = model_choice
     if provider == "Groq":
-        st.caption("Groq GPT-OSS 모델은 텍스트 전용으로 사용합니다. 사진은 ZIP에 포함되지만 사진 내용의 AI 분석은 생략됩니다. 이미지 분석은 Gemini를 선택해 주세요.")
+        st.caption("Groq 모델은 텍스트 전용으로 처리합니다. 사진은 ZIP에 포함되지만 사진 내용의 AI 분석은 생략됩니다. 이미지 분석은 Gemini를 선택해 주세요.")
         st.caption("Groq Console에서 발급한 Groq 전용 API 키를 입력하세요. 다른 AI 제공자/Gemini 키는 사용할 수 없습니다.")
         st.markdown("[Groq API 키 발급/관리 페이지 열기](https://console.groq.com/keys)")
         if st.button("Groq API 키 연결 테스트", key="test_groq_api_key"):
             if not api_key:
                 st.error("Groq API 키를 먼저 입력해 주세요.")
+            elif not model:
+                st.error("Groq에서 제공하는 모델 ID를 입력해 주세요.")
             else:
                 try:
                     check = requests.post(
@@ -931,6 +949,8 @@ else:
         if st.button("🧠 레퍼런스 문체 분석"):
             if not api_key:
                 st.error(f"먼저 {key_label}을 입력해 주세요.")
+            elif not model:
+                st.error("사용할 모델 ID를 입력해 주세요.")
             elif not refs:
                 st.error("문체를 분석할 PDF 또는 이미지 레퍼런스를 첨부해 주세요.")
             else:
@@ -996,6 +1016,9 @@ if st.session_state.get("upload_signature") != upload_signature:
 if st.button("원고 생성", type="primary"):
     if not api_key:
         st.error(f"{key_label}을 입력해 주세요.")
+        st.stop()
+    if not model:
+        st.error("사용할 모델 ID를 입력해 주세요.")
         st.stop()
     if not menu.strip():
         st.error("주문 메뉴를 입력해 주세요.")
