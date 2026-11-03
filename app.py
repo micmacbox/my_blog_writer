@@ -7,6 +7,7 @@
 실행:  streamlit run app_gemini.py
 """
 import base64
+import hashlib
 import html
 import io
 import json
@@ -903,27 +904,24 @@ with st.sidebar:
         st.session_state.pop("analysis", None)
 
 uploaded_images = st.file_uploader(
-    "사진 업로드 (GitHub/클라우드 배포 환경에서는 이 방식 사용)",
+    "사진 업로드",
     type=["jpg", "jpeg", "png", "webp", "heic", "heif", "gif"],
     accept_multiple_files=True,
-    help="Streamlit Community Cloud에서는 이 업로드 방식을 권장합니다. 사진은 분석·내보내기 전에 크기를 줄이며 GIF는 움직임을 유지합니다.",
+    key="blog_image_uploader",
+    help="Android 갤러리에서 사진을 여러 장 선택하고 완료를 누르세요. 선택된 사진은 아래 미리보기에 표시됩니다.",
 )
-
-# 일부 모바일 브라우저의 사진 선택창은 다중 선택을 지원하지 않거나 한 장만
-# 앱으로 전달한다. 보조 단일 업로더들을 제공해 여러 장을 순서대로 추가할 수 있게 한다.
-mobile_image_slots = []
-with st.expander("모바일에서 사진을 여러 장 추가하려면 여기를 누르세요"):
-    st.caption("사진 선택창에서 한 장씩 선택해도 됩니다. 선택한 사진은 위 업로드와 함께 처리됩니다.")
-    for slot_index in range(1, 9):
-        selected_image = st.file_uploader(
-            f"추가 사진 {slot_index}",
-            type=["jpg", "jpeg", "png", "webp", "heic", "heif", "gif"],
-            accept_multiple_files=False,
-            key=f"mobile_image_slot_{slot_index}",
-        )
-        if selected_image is not None:
-            mobile_image_slots.append(selected_image)
-uploaded_images = list(uploaded_images or []) + mobile_image_slots
+uploaded_images = list(uploaded_images or [])
+if uploaded_images:
+    st.caption(f"선택된 사진: {len(uploaded_images)}장")
+    preview_columns = st.columns(2)
+    for image_index, uploaded_image in enumerate(uploaded_images):
+        try:
+            preview = to_jpeg(io.BytesIO(uploaded_image.getvalue()), 480, quality=72)
+            with preview_columns[image_index % len(preview_columns)]:
+                st.image(preview, caption=f"{image_index + 1}. {uploaded_image.name}", use_container_width=True)
+        except Exception as e:
+            with preview_columns[image_index % len(preview_columns)]:
+                st.warning(f"미리보기를 표시하지 못했습니다: {uploaded_image.name} ({e})")
 
 st.subheader("1. 작성 문체")
 style_mode = st.radio(
@@ -1010,7 +1008,10 @@ def bind_status(live):
     WAIT = lambda sec: live.caption(f"⏳ 재시도 대기 중... {sec}초 남음")
 
 
-upload_signature = tuple((f.name, len(f.getvalue())) for f in (uploaded_images or []))
+upload_signature = tuple(
+    (f.name, len(raw := f.getvalue()), hashlib.sha256(raw).hexdigest())
+    for f in uploaded_images
+)
 if st.session_state.get("upload_signature") != upload_signature:
     st.session_state.pop("imgs", None)
     st.session_state.pop("analysis", None)
