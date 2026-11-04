@@ -15,12 +15,20 @@ import os
 import re
 import zipfile
 import requests
-try:  # OpenCV가 정상 설치되지 않은 환경에서도 이미지 로드는 계속합니다.
+try:
     import cv2
     import numpy as np
-except Exception:
-    cv2 = None
-    np = None
+except Exception as exc:
+    raise RuntimeError(
+        "얼굴 모자이크에 필요한 OpenCV를 불러오지 못했습니다. "
+        "requirements.txt 기준으로 패키지를 다시 설치한 뒤 앱을 재배포해 주세요."
+    ) from exc
+
+if not hasattr(cv2, "CascadeClassifier"):
+    raise RuntimeError(
+        "잘못된 cv2 모듈이 로드되었습니다(CascadeClassifier 없음). "
+        "opencv-python-headless 설치 환경을 정리하고 앱을 재배포해 주세요."
+    )
 from datetime import datetime
 from pathlib import Path
 
@@ -128,20 +136,13 @@ def mosaic_faces(image: Image.Image) -> Image.Image:
     """OpenCV의 정면·측면 얼굴 탐지기로 얼굴 영역만 픽셀 모자이크합니다."""
     global _FACE_CASCADES
     image = image.convert("RGB")
-    # cv2 네임스페이스가 불완전한 빌드(예: CascadeClassifier 누락)면
-    # 사진을 업로드 오류로 버리지 않고 원본 RGB 이미지를 그대로 사용합니다.
-    if cv2 is None or np is None or not hasattr(cv2, "CascadeClassifier"):
-        return image
     if _FACE_CASCADES is None:
-        try:
-            _FACE_CASCADES = [
-                cv2.CascadeClassifier(str(Path(cv2.data.haarcascades) / "haarcascade_frontalface_default.xml")),
-                cv2.CascadeClassifier(str(Path(cv2.data.haarcascades) / "haarcascade_profileface.xml")),
-            ]
-        except Exception:
-            _FACE_CASCADES = []
-    if not _FACE_CASCADES:
-        return image
+        _FACE_CASCADES = [
+            cv2.CascadeClassifier(str(Path(cv2.data.haarcascades) / "haarcascade_frontalface_default.xml")),
+            cv2.CascadeClassifier(str(Path(cv2.data.haarcascades) / "haarcascade_profileface.xml")),
+        ]
+    if not _FACE_CASCADES or all(cascade.empty() for cascade in _FACE_CASCADES):
+        raise RuntimeError("얼굴 탐지 모델을 불러오지 못했습니다. OpenCV 패키지 설치를 확인해 주세요.")
     rgb = image
     gray = cv2.cvtColor(np.array(rgb), cv2.COLOR_RGB2GRAY)
     found = []
