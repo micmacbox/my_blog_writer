@@ -488,7 +488,7 @@ ANALYZE_PROMPT = """위 사진들을 각각 분석해서 JSON 배열만 출력�
 "description": "눈에 보이는 구체적 내용(색, 재료, 양, 플레이팅, 분위기, 간판/메뉴판의 읽히는 글자)",
 "menu_guess": "메뉴명이 읽히거나 확실할 때만, 아니면 빈 문자열",
 "caption": "블로그 사진 아래 들어갈 한 줄 캡션 후보",
-"usable": true/false  // 심하게 흐리거나, 얼굴·번호판·영수증 카드번호 등 개인정보가 두드러지면 false
+"usable": true/false  // 사진 자체가 심하게 흐리거나 원고에 쓸 수 없을 때만 false. 얼굴이 보인다는 이유로 false로 표시하지 않는다. 얼굴은 업로드 처리 단계에서 모자이크된다.
 }"""
 
 
@@ -662,7 +662,7 @@ WRITE_SYSTEM = """너는 네이버 블로그 맛집/장소 후기 전문 작가�
 - 확인되지 않은 검색량, 인기 순위, 방문자 수, 영업 정보, 주차 가능 여부를 추정하지 않는다. 검색 상위 노출이나 순위를 보장하는 표현을 쓰지 않는다.
 
 [이미지 배치]
-- 사진은 [[IMG_01]] 처럼 마커를 단독 한 줄로 넣는다. 분석표에서 usable=true인 사진은 가급적 모두, 각각 정확히 한 번만 사용한다.
+- 사진은 [[IMG_01]] 처럼 마커를 단독 한 줄로 넣는다. 사진 분석표의 모든 사진을 각각 정확히 한 번씩 사용한다. 얼굴이 보이는 사진도 얼굴 모자이크 후 사용할 수 있으므로 얼굴이 있다는 이유로 제외하지 않는다. 사진 자체가 심하게 흐리거나 원고에 쓸 수 없는 경우만 제외한다.
 - 흐름은 대체로 외관 → 내부/시설 → 메뉴판/가격표 → 음식 전체샷 → 음식별 근접샷 → 마무리 순으로 구성한다. 음식 사진보다 메뉴판 사진을 반드시 먼저 배치한다(메뉴판 사진이 실제로 제공된 경우).
 - 같은 종류 사진은 연속 3장까지만 배치하고, 사진 직후에는 그 사진 내용과 맞는 1~3문장을 쓴다. 사진 설명에 없는 맛·재료·가격을 지어내지 않는다.
 - 메뉴판 사진을 배치한 뒤에 메뉴명과 가격을 소개하고, 음식 사진에서는 비주얼·양·식감·맛 등 제공된 메모나 사진으로 뒷받침되는 부분만 서술한다.
@@ -852,6 +852,8 @@ def make_thumbnail(image_bytes: bytes, title: str) -> bytes:
     draw = ImageDraw.Draw(canvas)
 
     font_paths = (
+        Path(__file__).resolve().parent / "assets" / "Pretendard-Black.otf",
+        Path(__file__).resolve().parent / "assets" / "NotoSansKR-VF.ttf",
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
         "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
         "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
@@ -862,7 +864,14 @@ def make_thumbnail(image_bytes: bytes, title: str) -> bytes:
         raise RuntimeError("한글 글꼴을 찾을 수 없습니다. Noto Sans CJK 또는 나눔고딕 글꼴을 설치해 주세요.")
 
     def load_font(size):
-        return ImageFont.truetype(font_path, size=size)
+        font = ImageFont.truetype(font_path, size=size)
+        try:
+            axes = font.get_variation_axes()
+            if axes:
+                font.set_variation_by_axes([700] + [axis["default"] for axis in axes[1:]])
+        except (AttributeError, OSError, ValueError):
+            pass
+        return font
 
     def wrap_text(text, font, max_width):
         lines = []
@@ -921,7 +930,7 @@ def make_thumbnail(image_bytes: bytes, title: str) -> bytes:
         y += height + gap
 
     # 예시의 크리에이터 라벨은 왼쪽 위로 옮기고, 서명은 모든 이미지와 같이 오른쪽 아래에 둡니다.
-    label_font = ImageFont.truetype(font_path, size=20)
+    label_font = load_font(20)
     label = "@치와바타"
     label_box = draw.textbbox((0, 0), label, font=label_font)
     label_pad_x, label_pad_y = 12, 7
