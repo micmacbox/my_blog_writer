@@ -817,7 +817,7 @@ def parse(text: str):
 # ──────────────────────────── 렌더링 / 내보내기 ────────────────────────────
 
 MARK = re.compile(r"^\s*\[\[(IMG_\d+)\]\]\s*$")
-THUMBNAIL_WHITE_OVERLAY_OPACITY = 0.60
+THUMBNAIL_WHITE_OVERLAY_OPACITY = 0.30
 
 
 def used_ids(body):
@@ -1337,8 +1337,8 @@ if thumbnail_upload or thumbnail_image_id:
             thumbnail_source = next(im["out"] for im in thumbnail_images if im["id"] == thumbnail_image_id)
         white_overlay = make_white_overlay(thumbnail_source, THUMBNAIL_WHITE_OVERLAY_OPACITY)
         thumbnail = make_thumbnail(thumbnail_source, thumbnail_title)
-        st.image(thumbnail, caption="600×500 · Pretendard Black · 흰색 오버레이 60%")
-        st.download_button("⬜ 흰색 오버레이 이미지 다운로드", white_overlay, "썸네일_배경_흰색60.png", "image/png", key="thumbnail_overlay_download")
+        st.image(thumbnail, caption="600×500 · Pretendard Black · 흰색 오버레이 30%")
+        st.download_button("⬜ 흰색 오버레이 이미지 다운로드", white_overlay, "썸네일_배경_흰색30.png", "image/png", key="thumbnail_overlay_download")
         st.download_button("🖼️ 썸네일 PNG 다운로드", thumbnail, "블로그_썸네일.png", "image/png", key="thumbnail_download")
     except (OSError, ValueError, RuntimeError) as exc:
         st.error(f"썸네일을 만들지 못했습니다: {exc}")
