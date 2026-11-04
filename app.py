@@ -803,7 +803,12 @@ def parse(text: str):
         m = re.search(rf"==={name}===\s*(.*?)(?====[A-Z]+===|\Z)", text, re.S)
         return m.group(1).strip() if m else ""
 
-    return {"title": sec("TITLE"), "body": sec("BODY"), "tags": sec("TAGS"), "keywords": sec("KEYWORDS"), "raw": text}
+    title = sec("TITLE")
+    body = sec("BODY")
+    frame_quote = f"[프레임 인용구: {title}]" if title else ""
+    if frame_quote and not body.startswith(frame_quote):
+        body = f"{frame_quote}\n\n{body}".strip()
+    return {"title": title, "body": body, "tags": sec("TAGS"), "keywords": sec("KEYWORDS"), "raw": text}
 
 
 # ──────────────────────────── 렌더링 / 내보내기 ────────────────────────────
