@@ -1310,26 +1310,27 @@ if res:
         st.download_button("📦 원고+이미지 ZIP (전체)", build_zip(res, imgs_by_id, f), "blog_draft.zip", "application/zip")
         st.download_button("📄 텍스트(.txt)", build_text(res, imgs_by_id, f), "원고.txt")
         st.download_button("🌐 HTML(.html)", build_html(res, imgs_by_id, f), "원고.html", "text/html")
-        if imgs_by_id:
-            st.divider()
-            st.markdown("**썸네일 만들기**")
-            thumbnail_upload = st.file_uploader(
-                "썸네일에 사용할 이미지 선택 (선택 사항)",
-                type=["png", "jpg", "jpeg", "webp", "gif", "heic", "heif"],
-                accept_multiple_files=False,
-                key="thumbnail_background_upload",
-                help="별도 이미지를 올리면 그 사진으로 썸네일과 흰색 오버레이 원본을 만들어요. 비워두면 아래 첨부 사진 목록에서 선택합니다.",
-            )
-            thumb_ids = list(imgs_by_id)
+        st.divider()
+        st.markdown("**썸네일 만들기**")
+        thumbnail_upload = st.file_uploader(
+            "썸네일용 이미지 업로드",
+            type=["png", "jpg", "jpeg", "webp", "gif", "heic", "heif"],
+            accept_multiple_files=False,
+            key="thumbnail_background_upload",
+            help="이미지를 업로드하면 썸네일과 흰색 오버레이 배경 이미지를 만듭니다.",
+        )
+        thumb_ids = list(imgs_by_id)
+        selected_thumb_id = None
+        if thumb_ids and thumbnail_upload is None:
             default_thumb_id = next((img_id for img_id in used_ids(res["body"]) if img_id in imgs_by_id), thumb_ids[0])
             selected_thumb_id = st.selectbox(
-                "첨부 사진 중에서 선택",
+                "또는 원고 첨부 사진에서 선택",
                 thumb_ids,
                 index=thumb_ids.index(default_thumb_id),
                 format_func=lambda img_id: imgs_by_id[img_id].get("name", img_id),
                 key="thumbnail_image_id",
-                disabled=thumbnail_upload is not None,
             )
+        if thumbnail_upload or selected_thumb_id:
             try:
                 thumbnail_source = thumbnail_upload.getvalue() if thumbnail_upload else imgs_by_id[selected_thumb_id]["out"]
                 white_overlay = make_white_overlay(thumbnail_source, 0.70)
@@ -1339,6 +1340,8 @@ if res:
                 st.download_button("🖼️ 썸네일 PNG 다운로드", thumbnail, "블로그_썸네일.png", "image/png", key="thumbnail_download")
             except (OSError, ValueError, RuntimeError) as exc:
                 st.error(f"썸네일을 만들지 못했습니다: {exc}")
+        else:
+            st.caption("이미지를 업로드하거나 원고 첨부 사진을 선택하면 썸네일이 생성됩니다.")
         st.warning("미리보기 사진을 복사해 붙여넣으면 네이버 에디터의 사진 편집창이 열리지 않을 수 있습니다. ZIP을 풀고 원고.txt를 붙여넣은 뒤, [사진 NN] 위치마다 네이버 에디터의 사진 첨부 버튼으로 해당 번호의 사진을 직접 넣어주세요.")
         st.caption("선택한 크롭 비율은 미리보기와 ZIP 사진에 적용됩니다. 크롭은 중앙 기준 자동 자르기이므로 가장자리의 사람·음식·간판 등이 잘릴 수 있어요. 중요한 피사체가 가장자리에 있으면 '원본 유지'를 선택하세요.")
 
