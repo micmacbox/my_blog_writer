@@ -23,7 +23,7 @@ import time
 from google import genai
 from google.genai import types
 import streamlit as st
-from PIL import Image, ImageOps, ImageSequence
+from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageSequence
 
 try:  # 아이폰 HEIC 사진 지원 (선택)
     import pillow_heif
@@ -120,6 +120,37 @@ def to_jpeg(src, max_side: int, quality: int = 85, crop_ratio: str = "원본 유
     return buf.getvalue()
 
 
+IMAGE_SIGNATURE = "https://blog.naver.com/fizz_report"
+
+
+def signature_font(size: int):
+    """서명용 기본 산세리프 글꼴을 우선 사용합니다."""
+    candidates = (
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
+        "/System/Library/Fonts/Supplemental/Helvetica.ttf",
+    )
+    for path in candidates:
+        if Path(path).is_file():
+            return ImageFont.truetype(path, size=size)
+    return ImageFont.load_default()
+
+
+def add_image_signature(image: Image.Image) -> Image.Image:
+    """이미지 오른쪽 아래에 작은 반투명 서명을 넣습니다."""
+    image = image.convert("RGBA")
+    draw = ImageDraw.Draw(image, "RGBA")
+    font = signature_font(max(12, min(image.size) // 45))
+    bbox = draw.textbbox((0, 0), IMAGE_SIGNATURE, font=font)
+    pad = max(5, min(image.size) // 100)
+    width, height = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    x = max(pad, image.width - width - pad * 2)
+    y = max(pad, image.height - height - pad * 2)
+    draw.rectangle((x - pad, y - pad, x + width + pad, y + height + pad), fill=(0, 0, 0, 125))
+    draw.text((x - bbox[0], y - bbox[1]), IMAGE_SIGNATURE, font=font, fill=(255, 255, 255, 235))
+    return image
+
+
 def process_gif(src, max_side: int = 860, crop_ratio: str = "원본 유지") -> bytes:
     """애니메이션 GIF의 모든 프레임에 크롭/리사이즈를 적용하면서 움직임을 보존합니다."""
     im = Image.open(src)
@@ -131,7 +162,7 @@ def process_gif(src, max_side: int = 860, crop_ratio: str = "원본 유지") -> 
             fr = frame.convert("RGBA")
             fr = crop_to_ratio(fr, crop_ratio)
             fr.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
-            frames.append(fr.copy())
+            frames.append(add_image_signature(fr.copy()))
             durations.append(frame.info.get("duration", im.info.get("duration", 100)))
     finally:
         im.close()
@@ -149,7 +180,14 @@ def process_output_image(path: Path, crop_ratio: str = "원본 유지"):
     """내보내기용 이미지 bytes, MIME, 확장자를 반환합니다. GIF는 애니메이션을 유지합니다."""
     if path.suffix.lower() == ".gif":
         return process_gif(path, 720, crop_ratio), "image/gif", ".gif"
-    return to_jpeg(path, 760, quality=78, crop_ratio=crop_ratio), "image/jpeg", ".jpg"
+    image = Image.open(path)
+    image = ImageOps.exif_transpose(image).convert("RGB")
+    image = crop_to_ratio(image, crop_ratio)
+    image.thumbnail((760, 760), Image.Resampling.LANCZOS)
+    image = add_image_signature(image)
+    buf = io.BytesIO()
+    image.convert("RGB").save(buf, "JPEG", quality=78, optimize=True)
+    return buf.getvalue(), "image/jpeg", ".jpg"
 
 
 def shot_time(path: Path) -> float:
@@ -200,7 +238,14 @@ def load_uploaded_images(uploaded_files, crop_ratio: str = "원본 유지"):
                 output = process_gif(io.BytesIO(raw), 720, crop_ratio)
                 mime, ext = "image/gif", ".gif"
             else:
-                output = to_jpeg(io.BytesIO(raw), 760, quality=78, crop_ratio=crop_ratio)
+                image = Image.open(io.BytesIO(raw))
+                image = ImageOps.exif_transpose(image).convert("RGB")
+                image = crop_to_ratio(image, crop_ratio)
+                image.thumbnail((760, 760), Image.Resampling.LANCZOS)
+                image = add_image_signature(image)
+                output_buf = io.BytesIO()
+                image.convert("RGB").save(output_buf, "JPEG", quality=78, optimize=True)
+                output = output_buf.getvalue()
                 mime, ext = "image/jpeg", ".jpg"
             api_image = to_jpeg(io.BytesIO(raw), 1280, quality=76)
             out.append({"id": f"IMG_{i:02d}", "name": uploaded.name, "api": api_image,
@@ -720,6 +765,102 @@ def render_preview(res, imgs_by_id, form):
     st.caption(disclosure_text(form))
 
 
+def make_thumbnail(image_bytes: bytes, title: str) -> bytes:
+    """사진에 흰색 75% 오버레이와 제목을 얹은 600×500 PNG를 만듭니다."""
+    with Image.open(io.BytesIO(image_bytes)) as source:
+        if getattr(source, "is_animated", False):
+            source.seek(0)
+        base = ImageOps.fit(source.convert("RGB"), (600, 500), method=Image.Resampling.LANCZOS).convert("RGBA")
+
+    overlay = Image.new("RGBA", base.size, (255, 255, 255, round(255 * 0.75)))
+    canvas = Image.alpha_composite(base, overlay)
+    draw = ImageDraw.Draw(canvas)
+
+    font_paths = (
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
+        "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
+        "/System/Library/Fonts/AppleSDGothicNeo.ttc",
+    )
+    font_path = next((path for path in font_paths if Path(path).is_file()), None)
+    if font_path is None:
+        raise RuntimeError("한글 글꼴을 찾을 수 없습니다. Noto Sans CJK 또는 나눔고딕 글꼴을 설치해 주세요.")
+
+    def load_font(size):
+        return ImageFont.truetype(font_path, size=size)
+
+    def wrap_text(text, font, max_width):
+        lines = []
+        for paragraph in str(text).splitlines() or [str(text)]:
+            words = paragraph.split()
+            if not words:
+                lines.append("")
+                continue
+            line = ""
+            for word in words:
+                candidate = f"{line} {word}".strip()
+                if draw.textbbox((0, 0), candidate, font=font, stroke_width=2)[2] <= max_width:
+                    line = candidate
+                    continue
+                if line:
+                    lines.append(line)
+                line = ""
+                for char in word:
+                    candidate = line + char
+                    if line and draw.textbbox((0, 0), candidate, font=font, stroke_width=2)[2] > max_width:
+                        lines.append(line)
+                        line = char
+                    else:
+                        line = candidate
+            if line:
+                lines.append(line)
+        return lines or [""]
+
+    title = str(title or "").strip()
+    if not title:
+        raise ValueError("블로그 제목이 비어 있어 썸네일 문구를 만들 수 없습니다.")
+    max_width, max_height = 540, 340
+    for size in range(54, 25, -2):
+        font = load_font(size)
+        lines = wrap_text(title, font, max_width)
+        boxes = [draw.textbbox((0, 0), line, font=font, stroke_width=3) for line in lines]
+        heights = [box[3] - box[1] for box in boxes]
+        gap = max(4, size // 7)
+        total_height = sum(heights) + gap * (len(lines) - 1)
+        if total_height <= max_height and all((box[2] - box[0]) <= max_width for box in boxes):
+            break
+    else:
+        font = load_font(26)
+        lines = wrap_text(title, font, max_width)
+        boxes = [draw.textbbox((0, 0), line, font=font, stroke_width=2) for line in lines]
+        heights = [box[3] - box[1] for box in boxes]
+        gap = 4
+        total_height = sum(heights) + gap * (len(lines) - 1)
+
+    y = (500 - total_height) / 2
+    for line, box, height in zip(lines, boxes, heights):
+        width = box[2] - box[0]
+        draw.text(((600 - width) / 2 - box[0], y - box[1]), line, font=font,
+                  fill=(255, 255, 255, 255), stroke_width=max(2, size // 14),
+                  stroke_fill=(20, 20, 20, 255))
+        y += height + gap
+
+    # 예시의 크리에이터 라벨은 왼쪽 위로 옮기고, 서명은 모든 이미지와 같이 오른쪽 아래에 둡니다.
+    label_font = ImageFont.truetype(font_path, size=20)
+    label = "@치와바타"
+    label_box = draw.textbbox((0, 0), label, font=label_font)
+    label_pad_x, label_pad_y = 12, 7
+    label_w, label_h = label_box[2] - label_box[0], label_box[3] - label_box[1]
+    draw.rectangle((0, 0, label_w + label_pad_x * 2, label_h + label_pad_y * 2), fill=(255, 194, 45, 255))
+    draw.text((label_pad_x - label_box[0], label_pad_y - label_box[1]), label,
+              font=label_font, fill=(255, 255, 255, 255))
+    canvas = add_image_signature(canvas)
+
+    output = io.BytesIO()
+    canvas.convert("RGB").save(output, format="PNG", optimize=True)
+    return output.getvalue()
+
+
 def seo_image_filename(seq, image, form):
     """Use the main keyword and analyzed scene in a short, descriptive export name."""
     def compact(value, limit):
@@ -1117,6 +1258,24 @@ if res:
         st.download_button("📦 원고+이미지 ZIP (전체)", build_zip(res, imgs_by_id, f), "blog_draft.zip", "application/zip")
         st.download_button("📄 텍스트(.txt)", build_text(res, imgs_by_id, f), "원고.txt")
         st.download_button("🌐 HTML(.html)", build_html(res, imgs_by_id, f), "원고.html", "text/html")
+        if imgs_by_id:
+            st.divider()
+            st.markdown("**썸네일 만들기**")
+            thumb_ids = list(imgs_by_id)
+            default_thumb_id = next((img_id for img_id in used_ids(res["body"]) if img_id in imgs_by_id), thumb_ids[0])
+            selected_thumb_id = st.selectbox(
+                "썸네일 배경 이미지",
+                thumb_ids,
+                index=thumb_ids.index(default_thumb_id),
+                format_func=lambda img_id: imgs_by_id[img_id].get("name", img_id),
+                key="thumbnail_image_id",
+            )
+            try:
+                thumbnail = make_thumbnail(imgs_by_id[selected_thumb_id]["out"], res.get("title", ""))
+                st.image(thumbnail, caption="블로그 제목을 그대로 넣은 600×500 썸네일")
+                st.download_button("🖼️ 썸네일 PNG 다운로드", thumbnail, "블로그_썸네일.png", "image/png", key="thumbnail_download")
+            except (OSError, ValueError, RuntimeError) as exc:
+                st.error(f"썸네일을 만들지 못했습니다: {exc}")
         st.warning("미리보기 사진을 복사해 붙여넣으면 네이버 에디터의 사진 편집창이 열리지 않을 수 있습니다. ZIP을 풀고 원고.txt를 붙여넣은 뒤, [사진 NN] 위치마다 네이버 에디터의 사진 첨부 버튼으로 해당 번호의 사진을 직접 넣어주세요.")
         st.caption("선택한 크롭 비율은 미리보기와 ZIP 사진에 적용됩니다. 크롭은 중앙 기준 자동 자르기이므로 가장자리의 사람·음식·간판 등이 잘릴 수 있어요. 중요한 피사체가 가장자리에 있으면 '원본 유지'를 선택하세요.")
 
