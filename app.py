@@ -15,6 +15,8 @@ import os
 import re
 import zipfile
 import requests
+import cv2
+import numpy as np
 from datetime import datetime
 from pathlib import Path
 
@@ -121,6 +123,43 @@ def to_jpeg(src, max_side: int, quality: int = 85, crop_ratio: str = "원본 유
 
 
 IMAGE_SIGNATURE = "https://blog.naver.com/fizz_report"
+_FACE_CASCADES = None
+
+
+def mosaic_faces(image: Image.Image) -> Image.Image:
+    """OpenCV의 정면·측면 얼굴 탐지기로 얼굴 영역만 픽셀 모자이크합니다."""
+    global _FACE_CASCADES
+    image = image.convert("RGB")
+    if _FACE_CASCADES is None:
+        _FACE_CASCADES = [
+            cv2.CascadeClassifier(str(Path(cv2.data.haarcascades) / "haarcascade_frontalface_default.xml")),
+            cv2.CascadeClassifier(str(Path(cv2.data.haarcascades) / "haarcascade_profileface.xml")),
+        ]
+    rgb = image
+    gray = cv2.cvtColor(np.array(rgb), cv2.COLOR_RGB2GRAY)
+    found = []
+    for cascade in _FACE_CASCADES:
+        if cascade.empty():
+            continue
+        found.extend(cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(24, 24)))
+        # 프로필 탐지기는 방향별로 따로 동작하므로 좌우 반전 이미지도 검사합니다.
+        if cascade is _FACE_CASCADES[1]:
+            flipped = cv2.flip(gray, 1)
+            found.extend((gray.shape[1] - x - w, y, w, h) for x, y, w, h in
+                         cascade.detectMultiScale(flipped, scaleFactor=1.1, minNeighbors=5, minSize=(24, 24)))
+
+    pixels = np.array(rgb)
+    width, height = image.size
+    for x, y, w, h in found:
+        # 얼굴 박스 가장자리가 잘리지 않도록 조금 넓혀 가립니다.
+        pad_x, pad_y = round(w * 0.12), round(h * 0.16)
+        left, top = max(0, x - pad_x), max(0, y - pad_y)
+        right, bottom = min(width, x + w + pad_x), min(height, y + h + pad_y)
+        face = Image.fromarray(pixels[top:bottom, left:right])
+        small_size = (max(1, (right - left) // 12), max(1, (bottom - top) // 12))
+        mosaic = face.resize(small_size, Image.Resampling.BILINEAR).resize(face.size, Image.Resampling.NEAREST)
+        pixels[top:bottom, left:right] = np.array(mosaic)
+    return Image.fromarray(pixels)
 
 
 def signature_font(size: int):
@@ -159,10 +198,10 @@ def process_gif(src, max_side: int = 860, crop_ratio: str = "원본 유지") -> 
     loop = im.info.get("loop", 0)
     try:
         for frame in ImageSequence.Iterator(im):
-            fr = frame.convert("RGBA")
+            fr = frame.convert("RGB")
             fr = crop_to_ratio(fr, crop_ratio)
             fr.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
-            frames.append(add_image_signature(fr.copy()))
+            frames.append(add_image_signature(mosaic_faces(fr.copy())))
             durations.append(frame.info.get("duration", im.info.get("duration", 100)))
     finally:
         im.close()
@@ -184,7 +223,7 @@ def process_output_image(path: Path, crop_ratio: str = "원본 유지"):
     image = ImageOps.exif_transpose(image).convert("RGB")
     image = crop_to_ratio(image, crop_ratio)
     image.thumbnail((760, 760), Image.Resampling.LANCZOS)
-    image = add_image_signature(image)
+    image = add_image_signature(mosaic_faces(image))
     buf = io.BytesIO()
     image.convert("RGB").save(buf, "JPEG", quality=78, optimize=True)
     return buf.getvalue(), "image/jpeg", ".jpg"
@@ -242,7 +281,7 @@ def load_uploaded_images(uploaded_files, crop_ratio: str = "원본 유지"):
                 image = ImageOps.exif_transpose(image).convert("RGB")
                 image = crop_to_ratio(image, crop_ratio)
                 image.thumbnail((760, 760), Image.Resampling.LANCZOS)
-                image = add_image_signature(image)
+                image = add_image_signature(mosaic_faces(image))
                 output_buf = io.BytesIO()
                 image.convert("RGB").save(output_buf, "JPEG", quality=78, optimize=True)
                 output = output_buf.getvalue()
