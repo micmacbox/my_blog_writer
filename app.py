@@ -555,7 +555,7 @@ DEFAULT_USER_STYLE_PROFILE = """[기본 문체: 사용자가 제공한 네이버
 
 원고 구성 순서
 - 본문 도입/서론을 먼저 쓴 뒤 해시태그 한 줄을 배치하고, 바로 다음 줄에 [스티커: 내돈내산]을 둔다. 그 다음부터 사진과 경험을 이어간다.
-- 이용팁과 총평 제목은 실제 핵심 문구를 넣은 [인용: 문구] 형식으로 쓴다.
+- 이용 팁 제목은 반드시 정확히 '[인용구: 이용 팁]', 총평 제목은 반드시 정확히 '[인용구: 총평]'으로 쓴다. 대괄호 안 문구는 바꾸지 않는다.
 - 본문 맨 아래에 [인용: 영업시간]을 쓰고, 바로 아래에 확인된 영업시간과 문의 전화번호를 배치한다. 예: '매일 10:30 - 22:00' 다음 줄에 '☎️문의 0507-1411-9922'. 확인되지 않은 값은 만들지 말고 '[확인 필요]'로 쓴다.
 - 모든 본문 내용의 최하단에는 [지도: 업체명]을 둔다. 업체명은 입력된 업체명을 그대로 사용한다.
 
@@ -606,7 +606,7 @@ STYLE_REVIEW_SYSTEM = """너는 블로그 원고의 문체 일치도를 검수�
 - 사실, 메뉴, 가격, 주소, 방문 경험을 새로 만들거나 바꾸지 않는다.
 - 제목/본문/태그/키워드 구분자와 모든 [[IMG_XX]] 이미지 마커를 정확히 보존한다. 마커를 삭제·중복·재배치하지 않는다.
 - 초안의 내용과 길이를 불필요하게 바꾸지 않고 문체만 보정한다.
-- 본문 구조를 도입/서론 → 해시태그 → [스티커: 내돈내산] → 나머지 본문과 사진 → 이용팁 [인용: 문구]와 내용 → 총평 [인용: 문구]와 내용 → [인용: 영업시간] → 영업시간 → 문의 번호 → [지도: 입력 업체명] 순서로 맞춘다. 해시태그는 ===TAGS===와 같게 유지한다.
+- 본문 구조를 도입/서론 → 해시태그 → [스티커: 내돈내산] → 나머지 본문과 사진 → '[인용구: 이용 팁]'과 확인된 이용 정보 → '[인용구: 총평]'과 총평 → [인용: 영업시간] → 영업시간 → 문의 번호 → [지도: 입력 업체명] 순서로 맞춘다. 두 인용구 제목의 문구는 반드시 고정한다. 해시태그는 ===TAGS===와 같게 유지한다.
 - 영업시간이나 전화번호는 원고의 입력 정보·사진에 확인되는 값만 쓰고, 모르면 '[확인 필요]'로 표시한다. 지도 마커의 업체명은 사용자가 입력한 업체명을 그대로 쓴다.
 - 아래 형식으로만 출력한다:
 ===TITLE===
@@ -641,7 +641,7 @@ WRITE_SYSTEM = """너는 네이버 블로그 맛집/장소 후기 전문 작가�
 - 정보는 또렷하게 전달하되 독자에게 말을 건네는 듯한 편안함을 살린다. 짧은 감상이나 자연스러운 구어 표현은 유지하고 문장을 지나치게 매끈한 설명문으로 고치지 않는다.
 - 마침표로 문장이 끝날 때마다 줄을 바꾼다. 마침표가 없어도 한 문장이 길거나 여러 내용을 담으면 자연스러운 호흡으로 나누고, 한 줄에 한 문장씩 배치한다.
 - 본문 도입/서론 직후에 해시태그 한 줄과 [스티커: 내돈내산]을 차례로 배치한다. 본문 태그는 ===TAGS===와 동일해야 한다.
-- 이용팁과 총평은 각 내용을 요약한 실제 문구를 [인용: 문구] 형식으로 제목에 쓴다. 영업정보 부분은 [인용: 영업시간] 다음 줄에 확인된 영업시간과 문의 번호를 배치하고, 알 수 없는 값은 '[확인 필요]'라고 쓴다.
+- 이용 팁과 총평의 제목은 각각 '[인용구: 이용 팁]', '[인용구: 총평]'으로 고정한다. 대괄호 안 제목 문구를 임의로 요약하거나 바꾸지 않는다. 영업정보 부분은 [인용: 영업시간] 다음 줄에 확인된 영업시간과 문의 번호를 배치하고, 알 수 없는 값은 '[확인 필요]'라고 쓴다.
 - 원고의 마지막 줄은 [지도: 입력된 업체명]이다. 업체명은 방문 정보에 입력된 값을 그대로 쓴다.
 - 레퍼런스의 문장·내용을 그대로 복사하지 않는다. 스타일만 참고한다.
 
@@ -653,7 +653,7 @@ WRITE_SYSTEM = """너는 네이버 블로그 맛집/장소 후기 전문 작가�
 - 메인 키워드가 비어 있으면 업체명·지역·업종/메뉴에서 대표 키워드를 정하고, 제목에 넣은 정확한 문구를 본문에 최소 5회 동일하게 사용한다.
 - 본문은 사진 수와 입력 정보에 맞춰 충분히 작성하되, 글자 수를 채우려고 같은 말을 반복하지 않는다.
 - 네이버 에디터에 바로 붙여넣을 수 있도록 마크다운 제목 기호(#, **)를 사용하지 않는다. 소제목은 짧고 명확하게 사용한다.
-- '서론 → 본론 → 결론'을 본문에 기계적으로 반복하지 않는다. 필요한 곳에 짧고 자연스러운 소제목을 두고 사진과 경험을 따라 전개한다. 이용팁과 총평은 각각 [인용: 문구] 형식으로 쓴다.
+- '서론 → 본론 → 결론'을 본문에 기계적으로 반복하지 않는다. 필요한 곳에 짧고 자연스러운 소제목을 두고 사진과 경험을 따라 전개한다. 이용 팁과 총평은 각각 '[인용구: 이용 팁]', '[인용구: 총평]'으로 고정해 쓴다.
 - 최상급·단정 표현("무조건", "인생 맛집", 효능 주장)은 피하고 경험 기반으로 서술한다.
 - 해시태그 8~12개를 생성해 본문 도입/서론 바로 뒤에 한 줄로 배치하고, ===TAGS===에도 동일하게 출력한다. 최종 출력 조립 과정에서 태그를 본문 끝에 다시 덧붙이지 않는다.
 - 메인 키워드와 서브 키워드는 검색 의도에 맞게 사용하되, 키워드 목록을 나열하지 말고 실제 정보가 담긴 문장에 포함한다.
@@ -680,9 +680,9 @@ WRITE_SYSTEM = """너는 네이버 블로그 맛집/장소 후기 전문 작가�
 #태그1 #태그2 ...
 [스티커: 내돈내산]
 (나머지 경험과 사진 마커)
-[인용: 실제 이용 팁을 요약한 문구]
+[인용구: 이용 팁]
 (확인된 실용 정보)
-[인용: 실제 총평을 요약한 문구]
+[인용구: 총평]
 (솔직한 최종 감상과 잘 맞는 방문자)
 [인용: 영업시간]
 (확인된 영업시간)
@@ -814,6 +814,7 @@ def parse(text: str):
 # ──────────────────────────── 렌더링 / 내보내기 ────────────────────────────
 
 MARK = re.compile(r"^\s*\[\[(IMG_\d+)\]\]\s*$")
+THUMBNAIL_WHITE_OVERLAY_OPACITY = 0.60
 
 
 def used_ids(body):
@@ -830,7 +831,7 @@ def render_preview(res, imgs_by_id, form):
             st.markdown(line.replace("~", r"\~"))
 
 
-def make_white_overlay(image_bytes: bytes, opacity: float = 0.70) -> bytes:
+def make_white_overlay(image_bytes: bytes, opacity: float = THUMBNAIL_WHITE_OVERLAY_OPACITY) -> bytes:
     """이미지를 600×500으로 맞춘 뒤 지정한 투명도의 흰색 오버레이를 적용합니다."""
     with Image.open(io.BytesIO(image_bytes)) as source:
         if getattr(source, "is_animated", False):
@@ -846,7 +847,7 @@ def make_white_overlay(image_bytes: bytes, opacity: float = 0.70) -> bytes:
 
 def make_thumbnail(image_bytes: bytes, title: str) -> bytes:
     """사진에 흰색 70% 오버레이와 제목을 얹은 600×500 PNG를 만듭니다."""
-    overlay_bytes = make_white_overlay(image_bytes, 0.70)
+    overlay_bytes = make_white_overlay(image_bytes, THUMBNAIL_WHITE_OVERLAY_OPACITY)
     with Image.open(io.BytesIO(overlay_bytes)) as image:
         canvas = image.convert("RGBA")
     draw = ImageDraw.Draw(canvas)
@@ -888,6 +889,7 @@ def make_thumbnail(image_bytes: bytes, title: str) -> bytes:
                     continue
                 if line:
                     lines.append(line)
+                # 공백 없는 긴 단어만 폭을 넘지 않게 글자 단위로 나눕니다.
                 line = ""
                 for char in word:
                     candidate = line + char
@@ -903,23 +905,25 @@ def make_thumbnail(image_bytes: bytes, title: str) -> bytes:
     title = str(title or "").strip()
     if not title:
         raise ValueError("블로그 제목이 비어 있어 썸네일 문구를 만들 수 없습니다.")
-    max_width, max_height = 540, 340
-    for size in range(54, 25, -2):
+    max_width, max_height = 540, 330
+    for size in range(54, 9, -2):
         font = load_font(size)
         lines = wrap_text(title, font, max_width)
         boxes = [draw.textbbox((0, 0), line, font=font, stroke_width=3) for line in lines]
         heights = [box[3] - box[1] for box in boxes]
         gap = max(4, size // 7)
         total_height = sum(heights) + gap * (len(lines) - 1)
-        if total_height <= max_height and all((box[2] - box[0]) <= max_width for box in boxes):
+        if len(lines) <= 3 and total_height <= max_height and all((box[2] - box[0]) <= max_width for box in boxes):
             break
     else:
-        font = load_font(26)
+        font = load_font(10)
         lines = wrap_text(title, font, max_width)
         boxes = [draw.textbbox((0, 0), line, font=font, stroke_width=2) for line in lines]
         heights = [box[3] - box[1] for box in boxes]
         gap = 4
         total_height = sum(heights) + gap * (len(lines) - 1)
+        if len(lines) > 3:
+            raise ValueError("제목이 너무 길어 썸네일 문구를 3줄 안에 표시할 수 없습니다. 제목을 줄여 주세요.")
 
     y = (500 - total_height) / 2
     for line, box, height in zip(lines, boxes, heights):
@@ -1297,6 +1301,47 @@ if st.button("원고 생성", type="primary"):
         status.update(label=f"완료! (총 {time.time() - t_start:.0f}초)", state="complete", expanded=False)
 
 res = st.session_state.get("result")
+st.divider()
+st.subheader("썸네일 만들기")
+st.caption("원고 생성과 별도로 썸네일을 만들 수 있습니다. 블로그 제목과 배경 이미지를 지정하세요.")
+thumbnail_title = st.text_input(
+    "블로그 제목 (썸네일 문구)",
+    value=res.get("title", "") if res else "",
+    key="standalone_thumbnail_title",
+)
+thumbnail_upload = st.file_uploader(
+    "썸네일용 이미지 업로드",
+    type=["png", "jpg", "jpeg", "webp", "gif", "heic", "heif"],
+    accept_multiple_files=False,
+    key="thumbnail_background_upload",
+    help="이미지를 업로드하면 썸네일과 흰색 오버레이 배경 이미지를 만듭니다.",
+)
+thumbnail_images = st.session_state.get("imgs", [])
+thumbnail_image_id = None
+if thumbnail_images and thumbnail_upload is None:
+    thumbnail_image_ids = [im["id"] for im in thumbnail_images]
+    thumbnail_image_id = st.selectbox(
+        "또는 원고 첨부 사진에서 선택",
+        thumbnail_image_ids,
+        format_func=lambda image_id: next((im["name"] for im in thumbnail_images if im["id"] == image_id), image_id),
+        key="thumbnail_image_id",
+    )
+if thumbnail_upload or thumbnail_image_id:
+    try:
+        if thumbnail_upload:
+            thumbnail_source = thumbnail_upload.getvalue()
+        else:
+            thumbnail_source = next(im["out"] for im in thumbnail_images if im["id"] == thumbnail_image_id)
+        white_overlay = make_white_overlay(thumbnail_source, THUMBNAIL_WHITE_OVERLAY_OPACITY)
+        thumbnail = make_thumbnail(thumbnail_source, thumbnail_title)
+        st.image(thumbnail, caption="600×500 · Pretendard Black · 흰색 오버레이 60%")
+        st.download_button("⬜ 흰색 오버레이 이미지 다운로드", white_overlay, "썸네일_배경_흰색60.png", "image/png", key="thumbnail_overlay_download")
+        st.download_button("🖼️ 썸네일 PNG 다운로드", thumbnail, "블로그_썸네일.png", "image/png", key="thumbnail_download")
+    except (OSError, ValueError, RuntimeError) as exc:
+        st.error(f"썸네일을 만들지 못했습니다: {exc}")
+else:
+    st.caption("이미지를 업로드하거나 원고 첨부 사진을 선택하면 썸네일이 생성됩니다.")
+
 if res:
     analysis_by_id = st.session_state.get("analysis", {})
     imgs_by_id = {
@@ -1338,38 +1383,6 @@ if res:
         st.download_button("📦 원고+이미지 ZIP (전체)", build_zip(res, imgs_by_id, f), "blog_draft.zip", "application/zip")
         st.download_button("📄 텍스트(.txt)", build_text(res, imgs_by_id, f), "원고.txt")
         st.download_button("🌐 HTML(.html)", build_html(res, imgs_by_id, f), "원고.html", "text/html")
-        st.divider()
-        st.markdown("**썸네일 만들기**")
-        thumbnail_upload = st.file_uploader(
-            "썸네일용 이미지 업로드",
-            type=["png", "jpg", "jpeg", "webp", "gif", "heic", "heif"],
-            accept_multiple_files=False,
-            key="thumbnail_background_upload",
-            help="이미지를 업로드하면 썸네일과 흰색 오버레이 배경 이미지를 만듭니다.",
-        )
-        thumb_ids = list(imgs_by_id)
-        selected_thumb_id = None
-        if thumb_ids and thumbnail_upload is None:
-            default_thumb_id = next((img_id for img_id in used_ids(res["body"]) if img_id in imgs_by_id), thumb_ids[0])
-            selected_thumb_id = st.selectbox(
-                "또는 원고 첨부 사진에서 선택",
-                thumb_ids,
-                index=thumb_ids.index(default_thumb_id),
-                format_func=lambda img_id: imgs_by_id[img_id].get("name", img_id),
-                key="thumbnail_image_id",
-            )
-        if thumbnail_upload or selected_thumb_id:
-            try:
-                thumbnail_source = thumbnail_upload.getvalue() if thumbnail_upload else imgs_by_id[selected_thumb_id]["out"]
-                white_overlay = make_white_overlay(thumbnail_source, 0.70)
-                thumbnail = make_thumbnail(thumbnail_source, res.get("title", ""))
-                st.image(thumbnail, caption="블로그 제목을 그대로 넣은 600×500 썸네일")
-                st.download_button("⬜ 흰색 오버레이 이미지 다운로드", white_overlay, "썸네일_배경_흰색70.png", "image/png", key="thumbnail_overlay_download")
-                st.download_button("🖼️ 썸네일 PNG 다운로드", thumbnail, "블로그_썸네일.png", "image/png", key="thumbnail_download")
-            except (OSError, ValueError, RuntimeError) as exc:
-                st.error(f"썸네일을 만들지 못했습니다: {exc}")
-        else:
-            st.caption("이미지를 업로드하거나 원고 첨부 사진을 선택하면 썸네일이 생성됩니다.")
         st.warning("미리보기 사진을 복사해 붙여넣으면 네이버 에디터의 사진 편집창이 열리지 않을 수 있습니다. ZIP을 풀고 원고.txt를 붙여넣은 뒤, [사진 NN] 위치마다 네이버 에디터의 사진 첨부 버튼으로 해당 번호의 사진을 직접 넣어주세요.")
         st.caption("선택한 크롭 비율은 미리보기와 ZIP 사진에 적용됩니다. 크롭은 중앙 기준 자동 자르기이므로 가장자리의 사람·음식·간판 등이 잘릴 수 있어요. 중요한 피사체가 가장자리에 있으면 '원본 유지'를 선택하세요.")
 
