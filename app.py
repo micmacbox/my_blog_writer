@@ -811,15 +811,25 @@ def render_preview(res, imgs_by_id, form):
             st.markdown(line.replace("~", r"\~"))
 
 
-def make_thumbnail(image_bytes: bytes, title: str) -> bytes:
-    """사진에 흰색 75% 오버레이와 제목을 얹은 600×500 PNG를 만듭니다."""
+def make_white_overlay(image_bytes: bytes, opacity: float = 0.70) -> bytes:
+    """이미지를 600×500으로 맞춘 뒤 지정한 투명도의 흰색 오버레이를 적용합니다."""
     with Image.open(io.BytesIO(image_bytes)) as source:
         if getattr(source, "is_animated", False):
             source.seek(0)
         base = ImageOps.fit(source.convert("RGB"), (600, 500), method=Image.Resampling.LANCZOS).convert("RGBA")
 
-    overlay = Image.new("RGBA", base.size, (255, 255, 255, round(255 * 0.75)))
+    overlay = Image.new("RGBA", base.size, (255, 255, 255, round(255 * opacity)))
     canvas = Image.alpha_composite(base, overlay)
+    output = io.BytesIO()
+    canvas.convert("RGB").save(output, format="PNG", optimize=True)
+    return output.getvalue()
+
+
+def make_thumbnail(image_bytes: bytes, title: str) -> bytes:
+    """사진에 흰색 70% 오버레이와 제목을 얹은 600×500 PNG를 만듭니다."""
+    overlay_bytes = make_white_overlay(image_bytes, 0.70)
+    with Image.open(io.BytesIO(overlay_bytes)) as image:
+        canvas = image.convert("RGBA")
     draw = ImageDraw.Draw(canvas)
 
     font_paths = (
@@ -1303,18 +1313,29 @@ if res:
         if imgs_by_id:
             st.divider()
             st.markdown("**썸네일 만들기**")
+            thumbnail_upload = st.file_uploader(
+                "썸네일에 사용할 이미지 선택 (선택 사항)",
+                type=["png", "jpg", "jpeg", "webp", "gif", "heic", "heif"],
+                accept_multiple_files=False,
+                key="thumbnail_background_upload",
+                help="별도 이미지를 올리면 그 사진으로 썸네일과 흰색 오버레이 원본을 만들어요. 비워두면 아래 첨부 사진 목록에서 선택합니다.",
+            )
             thumb_ids = list(imgs_by_id)
             default_thumb_id = next((img_id for img_id in used_ids(res["body"]) if img_id in imgs_by_id), thumb_ids[0])
             selected_thumb_id = st.selectbox(
-                "썸네일 배경 이미지",
+                "첨부 사진 중에서 선택",
                 thumb_ids,
                 index=thumb_ids.index(default_thumb_id),
                 format_func=lambda img_id: imgs_by_id[img_id].get("name", img_id),
                 key="thumbnail_image_id",
+                disabled=thumbnail_upload is not None,
             )
             try:
-                thumbnail = make_thumbnail(imgs_by_id[selected_thumb_id]["out"], res.get("title", ""))
+                thumbnail_source = thumbnail_upload.getvalue() if thumbnail_upload else imgs_by_id[selected_thumb_id]["out"]
+                white_overlay = make_white_overlay(thumbnail_source, 0.70)
+                thumbnail = make_thumbnail(thumbnail_source, res.get("title", ""))
                 st.image(thumbnail, caption="블로그 제목을 그대로 넣은 600×500 썸네일")
+                st.download_button("⬜ 흰색 오버레이 이미지 다운로드", white_overlay, "썸네일_배경_흰색70.png", "image/png", key="thumbnail_overlay_download")
                 st.download_button("🖼️ 썸네일 PNG 다운로드", thumbnail, "블로그_썸네일.png", "image/png", key="thumbnail_download")
             except (OSError, ValueError, RuntimeError) as exc:
                 st.error(f"썸네일을 만들지 못했습니다: {exc}")
