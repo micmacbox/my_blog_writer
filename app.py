@@ -24,9 +24,9 @@ except Exception as exc:
         "requirements.txt 기준으로 패키지를 다시 설치한 뒤 앱을 재배포해 주세요."
     ) from exc
 
-if not hasattr(cv2, "CascadeClassifier"):
+if not hasattr(cv2, "FaceDetectorYN"):
     raise RuntimeError(
-        "잘못된 cv2 모듈이 로드되었습니다(CascadeClassifier 없음). "
+        "잘못된 cv2 모듈이 로드되었습니다(FaceDetectorYN 없음). "
         "opencv-python-headless 설치 환경을 정리하고 앱을 재배포해 주세요."
     )
 from datetime import datetime
@@ -38,6 +38,7 @@ from google import genai
 from google.genai import types
 import streamlit as st
 from password_gate import require_password
+from face_mosaic import FACE_PROCESSING_VERSION, mosaic_faces
 from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageSequence
 
 try:  # 아이폰 HEIC 사진 지원 (선택)
@@ -130,47 +131,6 @@ def to_jpeg(src, max_side: int, quality: int = 85, crop_ratio: str = "원본 유
 
 
 IMAGE_SIGNATURE = "https://blog.naver.com/fizz_report"
-_FACE_CASCADES = None
-
-
-def mosaic_faces(image: Image.Image) -> Image.Image:
-    """OpenCV의 정면·측면 얼굴 탐지기로 얼굴 영역만 픽셀 모자이크합니다."""
-    global _FACE_CASCADES
-    image = image.convert("RGB")
-    if _FACE_CASCADES is None:
-        _FACE_CASCADES = [
-            cv2.CascadeClassifier(str(Path(cv2.data.haarcascades) / "haarcascade_frontalface_default.xml")),
-            cv2.CascadeClassifier(str(Path(cv2.data.haarcascades) / "haarcascade_profileface.xml")),
-        ]
-    if not _FACE_CASCADES or all(cascade.empty() for cascade in _FACE_CASCADES):
-        raise RuntimeError("얼굴 탐지 모델을 불러오지 못했습니다. OpenCV 패키지 설치를 확인해 주세요.")
-    rgb = image
-    gray = cv2.cvtColor(np.array(rgb), cv2.COLOR_RGB2GRAY)
-    found = []
-    for cascade in _FACE_CASCADES:
-        if cascade.empty():
-            continue
-        found.extend(cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(24, 24)))
-        # 프로필 탐지기는 방향별로 따로 동작하므로 좌우 반전 이미지도 검사합니다.
-        if cascade is _FACE_CASCADES[1]:
-            flipped = cv2.flip(gray, 1)
-            found.extend((gray.shape[1] - x - w, y, w, h) for x, y, w, h in
-                         cascade.detectMultiScale(flipped, scaleFactor=1.1, minNeighbors=5, minSize=(24, 24)))
-
-    pixels = np.array(rgb)
-    width, height = image.size
-    for x, y, w, h in found:
-        # 얼굴 박스 가장자리가 잘리지 않도록 조금 넓혀 가립니다.
-        pad_x, pad_y = round(w * 0.12), round(h * 0.16)
-        left, top = max(0, x - pad_x), max(0, y - pad_y)
-        right, bottom = min(width, x + w + pad_x), min(height, y + h + pad_y)
-        face = Image.fromarray(pixels[top:bottom, left:right])
-        small_size = (max(1, (right - left) // 12), max(1, (bottom - top) // 12))
-        mosaic = face.resize(small_size, Image.Resampling.BILINEAR).resize(face.size, Image.Resampling.NEAREST)
-        pixels[top:bottom, left:right] = np.array(mosaic)
-    return Image.fromarray(pixels)
-
-
 def signature_font(size: int):
     """서명용 기본 산세리프 글꼴을 우선 사용합니다."""
     candidates = (
@@ -1059,6 +1019,9 @@ def make_client(provider_name, key):
 
 st.set_page_config(page_title="네이버 블로그 후기 원고 작성기", page_icon="✍️", layout="wide")
 require_password()
+if st.session_state.get("face_processing_version") != FACE_PROCESSING_VERSION:
+    st.session_state.pop("imgs", None)
+    st.session_state["face_processing_version"] = FACE_PROCESSING_VERSION
 st.title("✍️ 네이버 블로그 후기 원고 작성기")
 
 with st.sidebar:
