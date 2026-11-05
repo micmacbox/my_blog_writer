@@ -37,6 +37,7 @@ import time
 from google import genai
 from google.genai import types
 import streamlit as st
+from password_gate import require_password
 from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageSequence
 
 try:  # 아이폰 HEIC 사진 지원 (선택)
@@ -1057,6 +1058,7 @@ def make_client(provider_name, key):
 # ──────────────────────────── UI ────────────────────────────
 
 st.set_page_config(page_title="네이버 블로그 후기 원고 작성기", page_icon="✍️", layout="wide")
+require_password()
 st.title("✍️ 네이버 블로그 후기 원고 작성기")
 
 with st.sidebar:
