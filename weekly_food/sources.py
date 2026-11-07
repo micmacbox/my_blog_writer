@@ -93,10 +93,22 @@ def google_news(http: Http, query: str, window: Window, limit: int) -> list[Evid
 
 
 def naver_search(http: Http, query: str, window: Window, kind: str,
-                 client_id: str, secret: str, limit: int) -> list[Evidence]:
-    data = http.json(f"https://openapi.naver.com/v1/search/{kind}.json", params={
+                 client_id: str, secret: str, limit: int, mode: str = "hub") -> list[Evidence]:
+    params = {
         "query": query, "sort": "date", "display": limit, "start": 1,
-    }, headers={"X-Naver-Client-Id": client_id, "X-Naver-Client-Secret": secret})
+    }
+    if mode == "hub":
+        url = f"https://naverapihub.apigw.ntruss.com/search/v1/{kind}"
+        headers = {"X-NCP-APIGW-API-KEY-ID": client_id, "X-NCP-APIGW-API-KEY": secret}
+        params["format"] = "json"
+    elif mode == "legacy":
+        url = f"https://openapi.naver.com/v1/search/{kind}.json"
+        headers = {"X-Naver-Client-Id": client_id, "X-Naver-Client-Secret": secret}
+    else:
+        raise ValueError("네이버 API 방식은 hub 또는 legacy여야 합니다.")
+    data = http.json(url, params=params, headers=headers)
+    if "error" in data or "errorCode" in data or "items" not in data:
+        raise SourceError("네이버 응답 오류: 선택한 API 방식·키 발급처·검색 API 사용 설정을 확인하세요.")
     result = []
     for item in data.get("items", []):
         try:
@@ -159,6 +171,9 @@ def youtube_search(http: Http, query: str, window: Window, key: str, limit: int)
 
 def collect(queries, window, credentials, sources, limit=20, progress=None):
     http, items, status = Http(), [], []
+    naver_mode = credentials.get("NAVER_API_MODE", "hub").strip().lower() or "hub"
+    if naver_mode not in {"hub", "legacy"}:
+        raise ValueError("NAVER_API_MODE는 hub 또는 legacy여야 합니다.")
     if (credentials.get("NAVER_CLIENT_ID") and not credentials.get("NAVER_CLIENT_SECRET")) or (
             credentials.get("NAVER_CLIENT_SECRET") and not credentials.get("NAVER_CLIENT_ID")):
         status.append({"source": "naver", "state": "skipped", "message": "네이버 ID와 Secret이 모두 필요합니다."})
@@ -180,11 +195,18 @@ def collect(queries, window, credentials, sources, limit=20, progress=None):
                     batch = youtube_search(http, query, window, credentials["YOUTUBE_API_KEY"], limit)
                 else:
                     batch = naver_search(http, query, window, source,
-                                         credentials["NAVER_CLIENT_ID"], credentials["NAVER_CLIENT_SECRET"], limit)
+                                         credentials["NAVER_CLIENT_ID"], credentials["NAVER_CLIENT_SECRET"], limit,
+                                         mode=naver_mode)
                 items.extend(batch)
-                status.append({"source": source, "query": query, "state": "ok", "count": len(batch)})
+                entry = {"source": source, "query": query, "state": "ok", "count": len(batch)}
+                if source in {"news", "blog"}:
+                    entry["api_mode"] = naver_mode
+                status.append(entry)
             except SourceError as exc:
-                status.append({"source": source, "query": query, "state": "error", "message": str(exc)})
+                entry = {"source": source, "query": query, "state": "error", "message": str(exc)}
+                if source in {"news", "blog"}:
+                    entry["api_mode"] = naver_mode
+                status.append(entry)
                 # Avoid retrying invalid credentials/quota for every remaining query.
                 break
     return items, status

@@ -140,7 +140,41 @@ class FoodTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0].date_precision, "day")
         self.assertEqual(rows[0].publisher_id, "https://blog.naver.com/test")
-        self.assertEqual(http.json.call_args.kwargs["headers"]["X-Naver-Client-Secret"], "secret")
+        self.assertEqual(http.json.call_args.args[0], "https://naverapihub.apigw.ntruss.com/search/v1/blog")
+        self.assertEqual(http.json.call_args.kwargs["headers"], {
+            "X-NCP-APIGW-API-KEY-ID": "id", "X-NCP-APIGW-API-KEY": "secret"})
+        self.assertEqual(http.json.call_args.kwargs["params"]["format"], "json")
+
+    def test_naver_hub_news_and_legacy_keys_use_separate_endpoints(self):
+        for mode, url, header in [
+            ("hub", "https://naverapihub.apigw.ntruss.com/search/v1/news", "X-NCP-APIGW-API-KEY"),
+            ("legacy", "https://openapi.naver.com/v1/search/news.json", "X-Naver-Client-Secret"),
+        ]:
+            with self.subTest(mode=mode):
+                http = Mock()
+                http.json.return_value = {"items": [{
+                    "title": "빵집 소식", "originallink": "https://publisher.example/news/1",
+                    "pubDate": "Sun, 08 Nov 2026 03:00:00 GMT",
+                }]}
+                rows = naver_search(http, "빵집", self.window, "news", "id", "secret", 20, mode=mode)
+                self.assertEqual(len(rows), 1)
+                self.assertEqual(http.json.call_args.args[0], url)
+                self.assertEqual(http.json.call_args.kwargs["headers"][header], "secret")
+                self.assertEqual(http.json.call_count, 1)  # Never silently send the key to both hosts.
+        with self.assertRaises(ValueError):
+            naver_search(Mock(), "빵", self.window, "news", "id", "secret", 20, mode="unknown")
+
+    def test_naver_collect_routes_configured_mode_and_exposes_error(self):
+        credentials = {"NAVER_CLIENT_ID": "id", "NAVER_CLIENT_SECRET": "secret", "NAVER_API_MODE": "legacy"}
+        with patch("weekly_food.sources.naver_search", return_value=[]) as search:
+            _, status = collect(["빵"], self.window, credentials, ["news"])
+            self.assertEqual(search.call_args.kwargs["mode"], "legacy")
+            self.assertEqual(status[0]["api_mode"], "legacy")
+        http = Mock()
+        http.json.return_value = {"error": {"message": "secret-do-not-log"}}
+        with self.assertRaises(SourceError) as error:
+            naver_search(http, "빵", self.window, "news", "id", "secret", 20)
+        self.assertNotIn("secret-do-not-log", str(error.exception))
 
     def test_youtube_statistics_are_fetched_separately(self):
         http = Mock()

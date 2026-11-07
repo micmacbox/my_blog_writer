@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import base64
 import json
 import re
 import zipfile
@@ -108,12 +109,16 @@ def research(window, queries, credentials=None, sources=None, limit=20,
 
 
 def source_footer(sources):
-    lines = ["## 출처", "", "아래 날짜는 자료 게시일이며 실제 방송일·방문일과 다를 수 있어요.", ""]
+    lines = ["## 출처", "", "뉴스·영상 날짜는 게시일이며 실제 방송일·방문일과 다를 수 있어요. 배경 자료는 확인일을 따로 표시했어요.", ""]
     for source in sources:
         published = source.published.astimezone(KST).strftime("%Y-%m-%d")
+        if source.date_precision == "retrieved":
+            published = "배경 자료 확인일 " + published + " (게시일 아님)"
         views = f" · 수집 시 누적 {source.views:,}회" if source.kind == "youtube" else ""
         title = source.title.replace("[", "(").replace("]", ")")
         lines.append(f"- [{source.id}] [{title}]({source.url}) · {source.publisher} · {published}{views}")
+        if source.kind == "reference" and "wikipedia.org" in source.url:
+            lines.append("  위키백과 기여자 · 배경 발췌/요약 · CC BY-SA 4.0: https://creativecommons.org/licenses/by-sa/4.0/")
     return "\n".join(lines)
 
 
@@ -125,10 +130,12 @@ def create_drafts(report, top=5, writer=None, progress=None):
     by_id = {row["id"]: Evidence(**row) for row in report["sources"]}
     drafts = []
     for row in report["topics"][:top]:
-        topic = Topic(**row)
+        topic = Topic(**{key: value for key, value in row.items() if key in Topic.__dataclass_fields__})
         sources = [by_id[sid] for sid in topic.source_ids]
         # Send only the 12 most recent evidence records for each draft, but export all links.
-        sample = sorted(sources, key=lambda s: s.published, reverse=True)[:12]
+        background = [s for s in sources if s.kind == "reference"][:2]
+        sample = background + sorted((s for s in sources if s.kind != "reference"),
+                                     key=lambda s: (bool(s.summary), s.published), reverse=True)[:12 - len(background)]
         mode = "근거 정리"
         title = (f"{topic.name}, 이번 주 공개 자료에서 살펴본 이야기" if topic.grouping != "headline"
                  else f"이번 주 음식 소식: {topic.name}")
@@ -143,17 +150,21 @@ def create_drafts(report, top=5, writer=None, progress=None):
                 report["warnings"].append(f"{topic.name}: {exc}")
         if not paragraphs:
             paragraphs = [{
-                "text": f"{s.published.astimezone(KST):%m월 %d일} {s.publisher}에서 "
-                        f"‘{s.title}’이라는 제목으로 관련 소식을 전했어요.",
+                "text": (f"{s.publisher}에서 ‘{s.title}’의 배경을 살펴볼 수 있어요. " + s.summary[:200]
+                         if s.kind == "reference" else
+                         f"{s.published.astimezone(KST):%m월 %d일} {s.publisher}에서 "
+                         f"‘{s.title}’이라는 제목으로 관련 소식을 전했어요."),
                 "source_ids": [s.id],
             } for s in sample[:5]]
         lines = [title, "", f"자료 수집 기간: {report['window']['label']}", "",
                  "직접 방문한 후기가 아니라 공개 검색 자료를 모아 정리한 정보성 초안이에요.",
-                 "검색 제목·요약·영상 설명을 바탕으로 작성했으며 원문 전체나 영상 자막을 확인한 글은 아니에요.", "",
-                 f"## 이번 주에 눈여겨본 이유\n\n수집 표본에서 {len(sources)}개 자료, "
-                 f"{topic.publisher_count}개 발행자에 걸쳐 관련 내용이 확인됐어요.\n"
+                 "검색 제목·요약·영상 설명과 연결된 배경 자료를 바탕으로 작성했으며 기사 전문이나 영상 자막을 확인한 글은 아니에요.", "",
+                 f"## 이번 주에 눈여겨본 이유\n\n주간 수집 표본에서 {row.get('weekly_source_count', len(sources))}개 자료, "
+                 f"{row.get('weekly_publisher_count', topic.publisher_count)}개 발행자에 걸쳐 관련 내용이 확인됐어요.\n"
                  "실제 이용객 수나 전국적인 인기 순위를 뜻하지는 않아요.", "",
                  "## 공개 자료에서 살펴본 내용", ""]
+        if "detail_added_count" in row:
+            lines[8:8] = [f"주제 선택 후 {row['detail_added_count']}개의 추가 자료를 연결했어요. 배경 자료의 확인일은 주간 인기도 근거와 구분했어요.", ""]
         for paragraph in paragraphs:
             refs = " ".join(f"[{sid}]" for sid in paragraph["source_ids"])
             lines.extend([paragraph["text"] + " " + refs, ""])
@@ -166,7 +177,8 @@ def create_drafts(report, top=5, writer=None, progress=None):
                       source_footer(sources), "", "#주간푸드트렌드 #음식정보 #" + topic.category])
         if report["demo"]:
             lines[0:0] = ["[데모: 모든 상호·음식·링크는 테스트용 가상 자료입니다]", ""]
-        drafts.append({"topic": topic.name, "title": title, "mode": mode,
+        drafts.append({"topic": topic.name, "title": title, "mode": mode, "category": topic.category,
+                       "source_ids": list(topic.source_ids),
                        "text": "\n".join(lines),
                        "review": ["출처 원문 및 실제 방송·영상 내용 대조", "매장 지점·지역 일치 확인",
                                   "가격·영업시간·판매 여부는 별도 확인 필요", "AI 문장의 사실 관계·출처 해석 검토"]})
@@ -174,8 +186,23 @@ def create_drafts(report, top=5, writer=None, progress=None):
     return report
 
 
+def draft_text(report, draft, markdown=False):
+    lines = []
+    for image in report.get("images", []):
+        if image["topic"] != draft["topic"]:
+            continue
+        if markdown:
+            lines.append(f"![참고 이미지](../{image['filename']})")
+        else:
+            lines.append(f"[사진 {image['number']:02d} : {image['filename']}]")
+        lines.extend([image["caption"], "이미지 출처: " + image["attribution"], ""])
+    return draft["text"].replace("## 출처", "## 참고 이미지\n\n" + "\n".join(lines) + "\n## 출처", 1) if lines else draft["text"]
+
+
 def export_files(report):
-    files = {"report.json": json.dumps(report, ensure_ascii=False, indent=2),
+    portable = {**report, "images": [{k: v for k, v in image.items() if k != "data_base64"}
+                                    for image in report.get("images", [])]}
+    files = {"report.json": json.dumps(portable, ensure_ascii=False, indent=2),
              "sources.json": json.dumps(report["sources"], ensure_ascii=False, indent=2)}
     lines = ["# 주간 푸드 트렌드 리서치", "", report["window"]["label"], "", METHOD, ""]
     if report["demo"]:
@@ -187,7 +214,7 @@ def export_files(report):
         lines.append(f"| {i} | {name} | {topic['category']} | {topic['score']:.2f} | "
                      f"{len(topic['source_ids'])} / {topic['publisher_count']} | {topic['grouping']} |")
     lines.extend(["", "## 수집 상태", ""])
-    for status in report["source_status"]:
+    for status in report["source_status"] + report.get("detail_status", []):
         lines.append(f"- {status['source']} {status.get('query', '')}: {status['state']} "
                      f"{status.get('count', '')} {status.get('message', '')}")
     lines.extend(["", "## 확인할 사항", ""] + ["- " + w for w in report["warnings"]])
@@ -195,11 +222,17 @@ def export_files(report):
     reviews = ["# 발행 전 확인", "", "초안은 자동 발행되지 않습니다. 검색 요약은 사실 확인을 대체하지 않습니다.", ""]
     for i, draft in enumerate(report["drafts"], 1):
         slug = re.sub(r"[^\w가-힣-]+", "_", draft["topic"]).strip("_")[:55] or "topic"
-        files[f"drafts/{i:02d}_{slug}.md"] = draft["text"]
-        files[f"drafts/{i:02d}_{slug}.txt"] = draft["text"]
+        files[f"drafts/{i:02d}_{slug}.md"] = draft_text(report, draft, markdown=True)
+        files[f"drafts/{i:02d}_{slug}.txt"] = draft_text(report, draft)
         reviews.extend([f"## {draft['topic']} ({draft['mode']})", ""] +
                        ["- [ ] " + item for item in draft["review"]] + [""])
     files["review_checklist.md"] = "\n".join(reviews)
+    credits = ["# 이미지 출처", "", "참고 이미지이며 실제 매장·제품의 촬영 사진으로 소개하지 마세요.", ""]
+    for image in report.get("images", []):
+        files[image["filename"]] = base64.b64decode(image["data_base64"])
+        credits.extend([image["filename"], image["caption"], image["attribution"], ""])
+    if report.get("images"):
+        files["image_credits.md"] = "\n".join(credits)
     return files
 
 
@@ -221,6 +254,9 @@ def save_report(report, output):
     for name, content in export_files(report).items():
         path = destination / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
+        if isinstance(content, bytes):
+            path.write_bytes(content)
+        else:
+            path.write_text(content, encoding="utf-8")
     (destination / "weekly_food.zip").write_bytes(zip_bytes(report))
     return destination

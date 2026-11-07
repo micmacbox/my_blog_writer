@@ -24,13 +24,24 @@ class AppTabsTests(unittest.TestCase):
             self.assertIn("사진 업로드", [w.label for w in app.tabs[0].get("file_uploader")])
             self.assertEqual(app.tabs[1].text_area(key="weekly_queries").label, "검색어 (한 줄에 하나)")
             self.assertEqual([b.label for b in app.sidebar.button], ["로그아웃"])
+            self.assertEqual(app.selectbox(key="weekly_naver_mode").value, "NAVER API HUB (신규 발급)")
+            app.selectbox(key="weekly_naver_mode").select("기존 개발자센터 (이전 발급)").run()
+            self.assertFalse(app.exception)
+            self.assertEqual(app.selectbox(key="weekly_naver_mode").value, "기존 개발자센터 (이전 발급)")
 
             app.text_input(key="generation_thumbnail_title").input("후기 탭 입력 유지")
             app.selectbox(key="weekly_provider").select("근거 정리 (AI 없이)")
             app.checkbox(key="weekly_demo").check()
             app.button(key="weekly_run").click().run()
             self.assertFalse(app.exception)
-            self.assertEqual(len(app.session_state["weekly_report"]["drafts"]), 2)
+            self.assertEqual(len(app.session_state["weekly_report"]["drafts"]), 0)
+            choices = next(w for w in app.multiselect if w.key.startswith("weekly_selected_"))
+            choices.set_value([1])
+            app.button(key="weekly_build").click().run()
+            self.assertFalse(app.exception)
+            self.assertEqual(len(app.session_state["weekly_posts"]["drafts"]), 1)
+            self.assertEqual(app.session_state["weekly_posts"]["drafts"][0]["topic"],
+                             app.session_state["weekly_report"]["topics"][1]["name"])
             self.assertEqual(app.text_input(key="generation_thumbnail_title").value, "후기 탭 입력 유지")
 
             # A review validation error must leave the other tab and its results visible.
@@ -47,6 +58,7 @@ class AppTabsTests(unittest.TestCase):
             self.assertFalse(app.exception)
             self.assertEqual(len(app.tabs), 0)
             self.assertNotIn("weekly_report", app.session_state)
+            self.assertNotIn("weekly_posts", app.session_state)
 
 
 if __name__ == "__main__":

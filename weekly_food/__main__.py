@@ -25,6 +25,9 @@ def main(argv=None):
     parser.add_argument("--top", type=int, default=5, help="상위 몇 개 원고를 만들지 (1~20)")
     parser.add_argument("--provider", choices=["auto", "none", "gemini", "groq"], default="auto")
     parser.add_argument("--model", help="AI 모델 ID (또는 GEMINI_MODEL/GROQ_MODEL)")
+    parser.add_argument("--naver-api-mode", choices=["hub", "legacy"],
+                        default=os.environ.get("NAVER_API_MODE", "hub").strip().lower() or "hub",
+                        help="네이버 키 발급처: hub=신규 NAVER API HUB (기본), legacy=기존 개발자센터")
     parser.add_argument("--output", type=Path, default=Path("output/weekly_food"))
     parser.add_argument("--demo", action="store_true", help="네트워크/API 호출 없이 가상 자료로 시연")
     args = parser.parse_args(argv)
@@ -43,6 +46,7 @@ def main(argv=None):
         credentials = {key: os.environ.get(key, "").strip() for key in (
             "NAVER_CLIENT_ID", "NAVER_CLIENT_SECRET", "YOUTUBE_API_KEY", "GEMINI_API_KEY", "GROQ_API_KEY")}
         credentials["GEMINI_API_KEY"] = credentials["GEMINI_API_KEY"] or os.environ.get("GOOGLE_API_KEY", "").strip()
+        credentials["NAVER_API_MODE"] = args.naver_api_mode
         provider = args.provider
         if provider == "auto":
             provider = ("gemini" if credentials["GEMINI_API_KEY"] else

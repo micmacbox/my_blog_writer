@@ -73,15 +73,18 @@ class Writer:
     def draft(self, topic, sources):
         data = {"topic": topic.name, "category": topic.category,
                 "sources": [{"id": s.id, "title": s.title, "summary": s.summary,
-                             "publisher": s.publisher} for s in sources]}
+                             "publisher": s.publisher, "kind": s.kind,
+                             "date_precision": s.date_precision} for s in sources]}
         result = self.json(
             "네이버 블로그용 한국어 정보성 초안을 작성하세요. 직접 방문·구매·시식한 척하지 마세요. "
-            "제공 자료는 검색 제목·요약 및 영상 설명이지 원문/자막이 아닙니다. "
+            "제공 자료는 검색 제목·요약 및 영상 설명, reference 유형의 백과사전 배경 발췌입니다. "
+            "reference는 배경 지식에만 사용하며 이번 주에 새로 나온 보도나 인기 근거라고 하지 마세요. "
+            "해당 음식의 특징·재료·관련 소식·이용 전 참고할 점을 자료가 있는 범위에서 구체적으로 구성하세요. "
             "제목에 SNS/방송명이 있다는 이유만으로 실제 방송 출연·SNS 전체 인기를 단정하지 마세요. "
             "자료에서 확인할 수 있는 내용만 짧게 바꿔 써 주세요. 광고성 표현은 사실로 단정하지 마세요. "
             "영업시간·전화·주소·가격·건강 효능·예약 가능 여부는 작성하지 마세요. "
             "조회 증가율이나 전국 인기 순위는 알 수 없습니다. '보도 제목에서 언급됐어요'처럼 범위를 밝히세요. "
-            "원문 문장 복사나 장문 인용 없이, 편안한 ~요 문체, 한 문단 1~2문장, 4~6문단으로 작성하세요. "
+            "원문 문장 복사나 장문 인용 없이, 편안한 ~요 문체, 한 문단 1~3문장, 6~10문단으로 작성하세요. "
             "모든 문단은 근거가 되는 source_ids를 포함해야 합니다. 추가 URL과 마크다운 링크는 쓰지 마세요. "
             '형식: {"paragraphs":[{"text":"문단 내용", "source_ids":["S..."]}]}.', data,
         )
@@ -121,7 +124,7 @@ def validate_topics(result, sources):
 def validate_paragraphs(result, sources):
     known = {s.id: s for s in sources}
     rows = result.get("paragraphs")
-    if not isinstance(rows, list) or not 1 <= len(rows) <= 8:
+    if not isinstance(rows, list) or not 1 <= len(rows) <= 12:
         raise AIError("원고 문단 형식이 올바르지 않아 근거 정리 초안으로 대체합니다.")
     validated = []
     for row in rows:
