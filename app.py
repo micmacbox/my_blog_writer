@@ -815,6 +815,8 @@ def render_preview(res, imgs_by_id, form):
         m = MARK.match(line)
         if m and m.group(1) in imgs_by_id:
             st.image(imgs_by_id[m.group(1)]["out"])
+        elif caption := re.fullmatch(r"\[이미지 캡션:\s*(.*?)\s*\]", line.strip()):
+            st.caption(caption.group(1))
         elif line.strip():
             st.markdown(line.replace("~", r"\~"))
 
@@ -1031,17 +1033,23 @@ def add_generation_thumbnail(archive):
         archive.writestr(f"사진/{filename}", content)
 
 
-def attach_generation_thumbnail_marker(result):
+def attach_generation_thumbnail_marker(result, store_name=""):
     artifacts = st.session_state.get("generation_thumbnail_artifacts") or {}
     thumbnail_filename = next((name for name in artifacts if name.endswith("_썸네일.jpg")), None)
     if thumbnail_filename:
         marker = f"[사진 썸네일 : {thumbnail_filename}]"
-        lines = [line for line in result["body"].splitlines() if line.strip() != marker]
+        business_name = (store_name or "").strip() or "업체명"
+        caption_marker = f"[이미지 캡션: {business_name} 메인이미지]"
+        lines = [
+            line for line in result["body"].splitlines()
+            if line.strip() != marker
+            and not re.fullmatch(r"\[이미지 캡션: .* 메인이미지\]", line.strip())
+        ]
         frame_index = next((i for i, line in enumerate(lines) if line.strip().startswith("[프레임 인용구:")), None)
         if frame_index is None:
-            lines.insert(0, marker)
+            lines[0:0] = [marker, caption_marker]
         else:
-            lines.insert(frame_index + 1, marker)
+            lines[frame_index + 1:frame_index + 1] = [marker, caption_marker]
         result["body"] = "\n".join(lines).strip()
     return result
 
@@ -1357,7 +1365,7 @@ if st.button("원고 생성", type="primary"):
                     thumbnail_filename: jpeg_buffer.getvalue(),
                     background_filename: white_background,
                 }
-                attach_generation_thumbnail_marker(result)
+                attach_generation_thumbnail_marker(result, form.get("store", ""))
             except (OSError, ValueError, RuntimeError) as exc:
                 st.session_state.pop("generation_thumbnail_artifacts", None)
                 st.error(f"원고용 썸네일을 만들지 못했습니다: {exc}")
@@ -1469,5 +1477,5 @@ if res:
                 raw = review_style(client, model, raw, style_profile)
             live.empty()
             status.update(label="수정 완료", state="complete")
-        st.session_state.result = attach_generation_thumbnail_marker(parse(raw))
+        st.session_state.result = attach_generation_thumbnail_marker(parse(raw), f.get("store", ""))
         st.rerun()
