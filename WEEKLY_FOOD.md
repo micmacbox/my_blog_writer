@@ -10,8 +10,10 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-로그인 후 왼쪽 페이지 목록에서 **주간 푸드 트렌드**를 선택합니다.
-기존 `BLOG_APP_PASSWORD`를 동일하게 사용하며 이 페이지도 로그인해야 열립니다.
+로그인 후 웹앱 상단의 **주간 푸드 트렌드** 탭을 선택합니다.
+**방문 후기 작성** 탭에서는 기존 사진·후기 기능을 사용합니다.
+각 탭의 설정은 해당 탭 안에 있으며, 탭을 바꿔도 입력과 생성 결과가 유지됩니다.
+기존 `BLOG_APP_PASSWORD`를 동일하게 사용하며 두 탭 모두 로그인해야 열립니다.
 
 1. 검색어를 한 줄씩 입력합니다. 지역을 좁히려면 `성수 디저트`, `부산 방송 맛집`처럼 바꿉니다.
 2. 기본 기간은 한국 시간으로 오늘을 포함한 7개 날짜입니다. 오늘은 실행 시각까지만 포함합니다.
@@ -36,7 +38,7 @@ AI 없이 나오는 초안은 제목·출처 중심의 조사 메모에 가깝�
 | Gemini (선택) | `GEMINI_API_KEY` 또는 `GOOGLE_API_KEY`, `GEMINI_MODEL` | 근거에서 주제 추출, 정보성 문장 작성 |
 | Groq (선택) | `GROQ_API_KEY`, `GROQ_MODEL` | 위와 동일. 모델 ID 지정 필요 |
 
-앱에서는 사이드바 입력, 환경변수, Streamlit Secrets를 지원합니다.
+앱에서는 탭 안의 **트렌드 수집 설정** 입력, 환경변수, Streamlit Secrets를 지원합니다.
 CLI는 환경변수를 사용합니다. `.env`와 `.streamlit/secrets.toml`을 자동으로 읽지 않습니다.
 API 키는 결과 JSON/ZIP에 저장하지 않습니다. 설정 JSON에도 키를 넣지 마세요.
 필요한 패키지는 기존 `requirements.txt`에 포함되어 있습니다. AI 없는 CLI에는 `requests`만 필요합니다(Python 3.9 이상).
@@ -52,7 +54,7 @@ GEMINI_MODEL = "gemini-3.1-flash-lite"
 # Groq 사용 시 GROQ_API_KEY, GROQ_MODEL도 설정합니다.
 ```
 
-Gemini 기본 모델은 기존 앱과 같은 `gemini-3.1-flash-lite`이며 사이드바·`--model`·환경변수로 변경할 수 있습니다.
+Gemini 기본 모델은 기존 앱과 같은 `gemini-3.1-flash-lite`이며 탭의 수집 설정·`--model`·환경변수로 변경할 수 있습니다.
 계정에서 사용 가능한 모델과 할당량은 제공자 콘솔에서 확인하세요. 검색·AI API의 사용 요금과 할당량은 각 계정에 적용됩니다.
 
 ## 터미널로 사용하기

@@ -6,6 +6,8 @@
 
 실행:  streamlit run app_gemini.py
 """
+from __future__ import annotations
+
 import base64
 import hashlib
 import html
@@ -38,6 +40,7 @@ from google import genai
 from google.genai import types
 import streamlit as st
 from password_gate import require_password
+from weekly_food.ui import render_weekly_food
 from face_mosaic import FACE_PROCESSING_VERSION, mosaic_faces
 from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageSequence
 
@@ -1061,421 +1064,427 @@ def make_client(provider_name, key):
 
 # ──────────────────────────── UI ────────────────────────────
 
-st.set_page_config(page_title="네이버 블로그 후기 원고 작성기", page_icon="✍️", layout="wide")
+st.set_page_config(page_title="네이버 블로그 원고 작성기", page_icon="✍️", layout="wide")
 require_password()
-if st.session_state.get("face_processing_version") != FACE_PROCESSING_VERSION:
-    st.session_state.pop("imgs", None)
-    st.session_state["face_processing_version"] = FACE_PROCESSING_VERSION
-st.title("✍️ 네이버 블로그 후기 원고 작성기")
+st.title("✍️ 네이버 블로그 원고 작성기")
+review_tab, weekly_tab = st.tabs(["방문 후기 작성", "주간 푸드 트렌드"])
 
-with st.sidebar:
-    st.header("설정")
-    provider = st.selectbox(
-        "AI 제공자",
-        ["Gemini", "Groq"],
-        index=0,
-        key="ai_provider",
-        help="Gemini 서버가 503 오류일 때 Groq로 전환할 수 있습니다. 제공자별 API 키가 필요합니다.",
+with weekly_tab:
+    render_weekly_food()
+
+with review_tab:
+    if st.session_state.get("face_processing_version") != FACE_PROCESSING_VERSION:
+        st.session_state.pop("imgs", None)
+        st.session_state["face_processing_version"] = FACE_PROCESSING_VERSION
+    st.subheader("✍️ 방문 후기 원고 작성기")
+
+    with st.expander("방문 후기 작성 설정", expanded=True):
+        provider = st.selectbox(
+            "AI 제공자",
+            ["Gemini", "Groq"],
+            index=0,
+            key="ai_provider",
+            help="Gemini 서버가 503 오류일 때 Groq로 전환할 수 있습니다. 제공자별 API 키가 필요합니다.",
+        )
+        key_env = {
+            "Gemini": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+            "Groq": ("GROQ_API_KEY",),
+        }[provider]
+        key_label = {"Gemini": "Gemini API Key", "Groq": "Groq API Key"}[provider]
+        key_default = next((os.environ.get(k, "") for k in key_env if os.environ.get(k)), "")
+        if not key_default:
+            try:
+                key_default = next((str(st.secrets[k]) for k in key_env if k in st.secrets), "")
+            except Exception:
+                key_default = ""
+        api_key = st.text_input(key_label, value=key_default, type="password", key=f"api_key_{provider}").strip()
+        model_choice = st.selectbox(
+            "모델",
+            [*PROVIDER_MODEL_OPTIONS[provider], "직접 입력"],
+            index=(PROVIDER_MODEL_OPTIONS[provider].index(DEFAULT_MODEL)
+                   if provider == "Gemini" and DEFAULT_MODEL in PROVIDER_MODEL_OPTIONS[provider]
+                   else len(PROVIDER_MODEL_OPTIONS[provider])),
+            key=f"model_choice_{provider}",
+        )
+        if model_choice == "직접 입력":
+            model = st.text_input(
+                "모델 ID 직접 입력",
+                value=st.session_state.get(f"custom_model_{provider}", ""),
+                key=f"custom_model_{provider}",
+                placeholder="예: gemini-3.1-flash-lite",
+            ).strip()
+        else:
+            model = model_choice
+        if provider == "Groq":
+            st.caption("Groq 모델은 텍스트 전용으로 처리합니다. 사진은 ZIP에 포함되지만 사진 내용의 AI 분석은 생략됩니다. 이미지 분석은 Gemini를 선택해 주세요.")
+            st.caption("Groq Console에서 발급한 Groq 전용 API 키를 입력하세요. 다른 AI 제공자/Gemini 키는 사용할 수 없습니다.")
+            st.markdown("[Groq API 키 발급/관리 페이지 열기](https://console.groq.com/keys)")
+            if st.button("Groq API 키 연결 테스트", key="test_groq_api_key"):
+                if not api_key:
+                    st.error("Groq API 키를 먼저 입력해 주세요.")
+                elif not model:
+                    st.error("Groq에서 제공하는 모델 ID를 입력해 주세요.")
+                else:
+                    try:
+                        check = requests.post(
+                            "https://api.groq.com/openai/v1/chat/completions",
+                            headers={"Authorization": f"Bearer {api_key.strip()}", "Content-Type": "application/json"},
+                            json={"model": model.strip(), "messages": [{"role": "user", "content": "Reply with OK only."}], "max_tokens": 8, "stream": False},
+                            timeout=(15, 45),
+                        )
+                        if check.status_code == 200:
+                            st.success(f"Groq 연결 성공! 모델 '{model}'의 실제 텍스트 생성 요청까지 확인했습니다.")
+                        elif check.status_code == 401:
+                            st.error("Groq가 API 키를 거부했습니다(401). console.groq.com/keys에서 새 키를 발급해 주세요.")
+                        else:
+                            st.error(f"Groq 모델/API 테스트 실패: HTTP {check.status_code} — {check.text[:500]}")
+                    except requests.RequestException as e:
+                        st.error(f"Groq 연결 테스트 중 네트워크 오류: {e}")
+        # 로컬 실행에서만 폴더 경로 입력과 다시 읽기 버튼을 노출합니다.
+        # 배포 환경에서는 해당 컨트롤을 숨기고 업로드 이미지 또는 저장소의 images 폴더를 사용합니다.
+        deployment_mode = is_deployment_environment()
+        folder = get_default_folder()
+        if not deployment_mode:
+            folder = st.text_input(
+                "이미지 폴더 경로 (선택)",
+                value=get_default_folder(),
+                placeholder="예: ./images 또는 /Users/사용자명/Pictures/blog",
+                help="로컬 PC의 이미지 폴더 경로를 입력할 수 있습니다.",
+            )
+
+        crop_ratio = st.selectbox("블로그 사진 크롭", ["원본 유지", "4:3 가로", "3:4 세로", "4:5 세로", "1:1 정사각형", "16:9 가로"], index=0,
+                                  help="원본 유지를 권장합니다. 비율을 선택하면 사진 중앙 기준으로 잘라 미리보기와 내보내기에 적용합니다. 가장자리의 피사체가 잘릴 수 있습니다.")
+        if st.session_state.get("crop_ratio_prev", "원본 유지") != crop_ratio:
+            st.session_state.pop("imgs", None)
+            st.session_state.pop("analysis", None)
+            st.session_state.crop_ratio_prev = crop_ratio
+        if not deployment_mode and st.button("이미지 다시 읽기"):
+            st.session_state.pop("imgs", None)
+            st.session_state.pop("analysis", None)
+
+    def mark_image_upload_changed():
+        st.session_state.image_upload_changed = True
+
+
+    uploaded_images = st.file_uploader(
+        "사진 업로드",
+        type="image",
+        accept_multiple_files=True,
+        key="blog_image_uploader",
+        on_change=mark_image_upload_changed,
+        help="Android 갤러리에서 사진을 여러 장 선택하고 완료를 누르세요. 첨부된 파일명은 아래 목록에 표시됩니다.",
     )
-    key_env = {
-        "Gemini": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
-        "Groq": ("GROQ_API_KEY",),
-    }[provider]
-    key_label = {"Gemini": "Gemini API Key", "Groq": "Groq API Key"}[provider]
-    key_default = next((os.environ.get(k, "") for k in key_env if os.environ.get(k)), "")
-    if not key_default:
-        try:
-            key_default = next((str(st.secrets[k]) for k in key_env if k in st.secrets), "")
-        except Exception:
-            key_default = ""
-    api_key = st.text_input(key_label, value=key_default, type="password", key=f"api_key_{provider}").strip()
-    model_choice = st.selectbox(
-        "모델",
-        [*PROVIDER_MODEL_OPTIONS[provider], "직접 입력"],
-        index=(PROVIDER_MODEL_OPTIONS[provider].index(DEFAULT_MODEL)
-               if provider == "Gemini" and DEFAULT_MODEL in PROVIDER_MODEL_OPTIONS[provider]
-               else len(PROVIDER_MODEL_OPTIONS[provider])),
-        key=f"model_choice_{provider}",
-    )
-    if model_choice == "직접 입력":
-        model = st.text_input(
-            "모델 ID 직접 입력",
-            value=st.session_state.get(f"custom_model_{provider}", ""),
-            key=f"custom_model_{provider}",
-            placeholder="예: gemini-3.1-flash-lite",
-        ).strip()
+    uploaded_images = list(uploaded_images or [])
+    image_upload_changed = st.session_state.pop("image_upload_changed", False)
+    if image_upload_changed or "upload_signature" not in st.session_state:
+        with st.spinner("첨부된 사진을 불러오는 중..."):
+            upload_signature = tuple(
+                (f.name, len(raw := f.getvalue()), hashlib.sha256(raw).hexdigest())
+                for f in uploaded_images
+            )
     else:
-        model = model_choice
-    if provider == "Groq":
-        st.caption("Groq 모델은 텍스트 전용으로 처리합니다. 사진은 ZIP에 포함되지만 사진 내용의 AI 분석은 생략됩니다. 이미지 분석은 Gemini를 선택해 주세요.")
-        st.caption("Groq Console에서 발급한 Groq 전용 API 키를 입력하세요. 다른 AI 제공자/Gemini 키는 사용할 수 없습니다.")
-        st.markdown("[Groq API 키 발급/관리 페이지 열기](https://console.groq.com/keys)")
-        if st.button("Groq API 키 연결 테스트", key="test_groq_api_key"):
-            if not api_key:
-                st.error("Groq API 키를 먼저 입력해 주세요.")
-            elif not model:
-                st.error("Groq에서 제공하는 모델 ID를 입력해 주세요.")
-            else:
-                try:
-                    check = requests.post(
-                        "https://api.groq.com/openai/v1/chat/completions",
-                        headers={"Authorization": f"Bearer {api_key.strip()}", "Content-Type": "application/json"},
-                        json={"model": model.strip(), "messages": [{"role": "user", "content": "Reply with OK only."}], "max_tokens": 8, "stream": False},
-                        timeout=(15, 45),
-                    )
-                    if check.status_code == 200:
-                        st.success(f"Groq 연결 성공! 모델 '{model}'의 실제 텍스트 생성 요청까지 확인했습니다.")
-                    elif check.status_code == 401:
-                        st.error("Groq가 API 키를 거부했습니다(401). console.groq.com/keys에서 새 키를 발급해 주세요.")
-                    else:
-                        st.error(f"Groq 모델/API 테스트 실패: HTTP {check.status_code} — {check.text[:500]}")
-                except requests.RequestException as e:
-                    st.error(f"Groq 연결 테스트 중 네트워크 오류: {e}")
-    # 로컬 실행에서만 폴더 경로 입력과 다시 읽기 버튼을 노출합니다.
-    # 배포 환경에서는 해당 컨트롤을 숨기고 업로드 이미지 또는 저장소의 images 폴더를 사용합니다.
-    deployment_mode = is_deployment_environment()
-    folder = get_default_folder()
-    if not deployment_mode:
-        folder = st.text_input(
-            "이미지 폴더 경로 (선택)",
-            value=get_default_folder(),
-            placeholder="예: ./images 또는 /Users/사용자명/Pictures/blog",
-            help="로컬 PC의 이미지 폴더 경로를 입력할 수 있습니다.",
-        )
-
-    crop_ratio = st.selectbox("블로그 사진 크롭", ["원본 유지", "4:3 가로", "3:4 세로", "4:5 세로", "1:1 정사각형", "16:9 가로"], index=0,
-                              help="원본 유지를 권장합니다. 비율을 선택하면 사진 중앙 기준으로 잘라 미리보기와 내보내기에 적용합니다. 가장자리의 피사체가 잘릴 수 있습니다.")
-    if st.session_state.get("crop_ratio_prev", "원본 유지") != crop_ratio:
+        upload_signature = st.session_state.upload_signature
+    if st.session_state.get("upload_signature") != upload_signature:
         st.session_state.pop("imgs", None)
         st.session_state.pop("analysis", None)
-        st.session_state.crop_ratio_prev = crop_ratio
-    if not deployment_mode and st.button("이미지 다시 읽기"):
-        st.session_state.pop("imgs", None)
-        st.session_state.pop("analysis", None)
+        st.session_state.upload_signature = upload_signature
 
-def mark_image_upload_changed():
-    st.session_state.image_upload_changed = True
+    if uploaded_images:
+        st.caption(f"선택된 사진: {len(uploaded_images)}장")
+        for image_index, uploaded_image in enumerate(uploaded_images, 1):
+            st.text(f"{image_index:02d}. {uploaded_image.name}")
 
+    st.subheader("1. 작성 문체")
+    style_mode = st.radio(
+        "어떤 문체로 작성할까요?",
+        ["내 문체 (기본)", "첨부 레퍼런스 문체"],
+        horizontal=True,
+        key="style_mode",
+        help="기본은 제공해 주신 블로그 원고의 말투를 사용합니다. 레퍼런스 문체를 선택하면 첨부한 글의 문체를 우선합니다."
+    )
+    refs = st.file_uploader("레퍼런스 원문 PDF 또는 이미지 (레퍼런스 문체 선택 시 사용, 여러 개 가능)", type=["pdf", "png", "jpg", "jpeg", "webp"], accept_multiple_files=True)
 
-uploaded_images = st.file_uploader(
-    "사진 업로드",
-    type="image",
-    accept_multiple_files=True,
-    key="blog_image_uploader",
-    on_change=mark_image_upload_changed,
-    help="Android 갤러리에서 사진을 여러 장 선택하고 완료를 누르세요. 첨부된 파일명은 아래 목록에 표시됩니다.",
-)
-uploaded_images = list(uploaded_images or [])
-image_upload_changed = st.session_state.pop("image_upload_changed", False)
-if image_upload_changed or "upload_signature" not in st.session_state:
-    with st.spinner("첨부된 사진을 불러오는 중..."):
-        upload_signature = tuple(
-            (f.name, len(raw := f.getvalue()), hashlib.sha256(raw).hexdigest())
-            for f in uploaded_images
-        )
-else:
-    upload_signature = st.session_state.upload_signature
-if st.session_state.get("upload_signature") != upload_signature:
-    st.session_state.pop("imgs", None)
-    st.session_state.pop("analysis", None)
-    st.session_state.upload_signature = upload_signature
-
-if uploaded_images:
-    st.caption(f"선택된 사진: {len(uploaded_images)}장")
-    for image_index, uploaded_image in enumerate(uploaded_images, 1):
-        st.text(f"{image_index:02d}. {uploaded_image.name}")
-
-st.subheader("1. 작성 문체")
-style_mode = st.radio(
-    "어떤 문체로 작성할까요?",
-    ["내 문체 (기본)", "첨부 레퍼런스 문체"],
-    horizontal=True,
-    key="style_mode",
-    help="기본은 제공해 주신 블로그 원고의 말투를 사용합니다. 레퍼런스 문체를 선택하면 첨부한 글의 문체를 우선합니다."
-)
-refs = st.file_uploader("레퍼런스 원문 PDF 또는 이미지 (레퍼런스 문체 선택 시 사용, 여러 개 가능)", type=["pdf", "png", "jpg", "jpeg", "webp"], accept_multiple_files=True)
-
-if "style_profile" not in st.session_state:
-    st.session_state.style_profile = ""
-if "style_profile_editor" not in st.session_state:
-    st.session_state.style_profile_editor = st.session_state.style_profile
-
-if style_mode == "내 문체 (기본)":
-    st.info("제공해 주신 네이버 블로그 캡처의 편한 후기체와 사진 중심의 모바일 문단 리듬을 기본 문체로 사용합니다. 외관·내부·메뉴·먹는 장면을 사진 흐름에 맞춰 소개하고, 사진마다 짧고 겹치지 않는 관찰과 감상을 붙입니다.")
-    with st.expander("내 기본 문체 프로필 보기"):
-        st.text_area("기본 문체 프로필", value=DEFAULT_USER_STYLE_PROFILE, height=260, disabled=True, key="default_style_profile_view")
-    active_style_profile = DEFAULT_USER_STYLE_PROFILE
-    style_review_enabled = st.checkbox("원고 생성 후 내 문체 기준으로 검수·보정", value=True, key="style_review_enabled")
-else:
-    style_col1, style_col2 = st.columns([1, 2])
-    with style_col1:
-        if st.button("🧠 레퍼런스 문체 분석"):
-            if not api_key:
-                st.error(f"먼저 {key_label}을 입력해 주세요.")
-            elif not model:
-                st.error("사용할 모델 ID를 입력해 주세요.")
-            elif not refs:
-                st.error("문체를 분석할 PDF 또는 이미지 레퍼런스를 첨부해 주세요.")
-            else:
-                client = make_client(provider, api_key)
-                with st.status("레퍼런스 문체를 분석하는 중...", expanded=True) as status:
-                    live = st.empty()
-                    bind_status(live) if "bind_status" in globals() else None
-                    profile = analyze_reference_style(client, model, build_ref_blocks(refs))
-                    st.session_state.style_profile = profile
-                    st.session_state.style_profile_editor = profile
-                    live.empty()
-                    status.update(label="문체 프로필 생성 완료", state="complete")
-                st.rerun()
-    with style_col2:
-        st.caption("원문 PDF/이미지를 첨부하고 문체 분석을 누르세요. 분석 결과는 직접 수정할 수 있고, 이후 레퍼런스 문체 모드에서 재사용됩니다.")
-    if st.button("레퍼런스 문체 프로필 비우기"):
+    if "style_profile" not in st.session_state:
         st.session_state.style_profile = ""
-        st.session_state.style_profile_editor = ""
-        st.rerun()
-    with st.expander("레퍼런스 문체 프로필 보기 / 수정", expanded=bool(st.session_state.get("style_profile"))):
-        style_profile_editor = st.text_area("문체 프로필 및 대표 문장 예시", key="style_profile_editor", height=260,
-            placeholder="레퍼런스 문체 분석 버튼을 누르면 말투, 문장 리듬, 문단 구성, 대표 문장 예시가 여기에 생성됩니다. 직접 입력하거나 수정할 수도 있습니다.")
-        st.session_state.style_profile = style_profile_editor
-    active_style_profile = st.session_state.get("style_profile_editor", st.session_state.get("style_profile", ""))
-    style_review_enabled = st.checkbox("원고 생성 후 레퍼런스 문체 기준으로 검수·보정 실행 (API 호출 추가)", value=True, key="style_review_enabled")
+    if "style_profile_editor" not in st.session_state:
+        st.session_state.style_profile_editor = st.session_state.style_profile
 
-st.subheader("2. 방문 정보")
-c1, c2, c3 = st.columns(3)
-store = c1.text_input("업체명 (선택)")
-region = c2.text_input("지역 (선택)", placeholder="예: 성수동")
-keyword = c3.text_input("메인 키워드 (선택)", placeholder="예: 성수 파스타 맛집", help="제목에 넣을 핵심 문구를 입력하세요. 입력한 문구는 띄어쓰기까지 동일하게 본문에 5회 이상 반영합니다.")
-seo1, seo2, seo3 = st.columns([2, 2, 2])
-subkeywords = seo1.text_input("서브 키워드 (선택)", placeholder="예: 성수동 데이트, 성수 파스타")
-content_type = seo2.selectbox("글 유형", ["자동 선택", "맛집", "카페", "피부과·뷰티", "방탈출·체험", "제품 리뷰", "여행·숙소", "기타"])
-search_intent = seo3.selectbox("검색 의도", ["자동 선택", "방문 전 정보 탐색", "가격·메뉴 비교", "실제 방문 후기", "예약·이용 방법", "제품 구매 전 비교"])
+    if style_mode == "내 문체 (기본)":
+        st.info("제공해 주신 네이버 블로그 캡처의 편한 후기체와 사진 중심의 모바일 문단 리듬을 기본 문체로 사용합니다. 외관·내부·메뉴·먹는 장면을 사진 흐름에 맞춰 소개하고, 사진마다 짧고 겹치지 않는 관찰과 감상을 붙입니다.")
+        with st.expander("내 기본 문체 프로필 보기"):
+            st.text_area("기본 문체 프로필", value=DEFAULT_USER_STYLE_PROFILE, height=260, disabled=True, key="default_style_profile_view")
+        active_style_profile = DEFAULT_USER_STYLE_PROFILE
+        style_review_enabled = st.checkbox("원고 생성 후 내 문체 기준으로 검수·보정", value=True, key="style_review_enabled")
+    else:
+        style_col1, style_col2 = st.columns([1, 2])
+        with style_col1:
+            if st.button("🧠 레퍼런스 문체 분석"):
+                if not api_key:
+                    st.error(f"먼저 {key_label}을 입력해 주세요.")
+                elif not model:
+                    st.error("사용할 모델 ID를 입력해 주세요.")
+                elif not refs:
+                    st.error("문체를 분석할 PDF 또는 이미지 레퍼런스를 첨부해 주세요.")
+                else:
+                    client = make_client(provider, api_key)
+                    with st.status("레퍼런스 문체를 분석하는 중...", expanded=True) as status:
+                        live = st.empty()
+                        bind_status(live) if "bind_status" in globals() else None
+                        profile = analyze_reference_style(client, model, build_ref_blocks(refs))
+                        st.session_state.style_profile = profile
+                        st.session_state.style_profile_editor = profile
+                        live.empty()
+                        status.update(label="문체 프로필 생성 완료", state="complete")
+                    st.rerun()
+        with style_col2:
+            st.caption("원문 PDF/이미지를 첨부하고 문체 분석을 누르세요. 분석 결과는 직접 수정할 수 있고, 이후 레퍼런스 문체 모드에서 재사용됩니다.")
+        if st.button("레퍼런스 문체 프로필 비우기"):
+            st.session_state.style_profile = ""
+            st.session_state.style_profile_editor = ""
+            st.rerun()
+        with st.expander("레퍼런스 문체 프로필 보기 / 수정", expanded=bool(st.session_state.get("style_profile"))):
+            style_profile_editor = st.text_area("문체 프로필 및 대표 문장 예시", key="style_profile_editor", height=260,
+                placeholder="레퍼런스 문체 분석 버튼을 누르면 말투, 문장 리듬, 문단 구성, 대표 문장 예시가 여기에 생성됩니다. 직접 입력하거나 수정할 수도 있습니다.")
+            st.session_state.style_profile = style_profile_editor
+        active_style_profile = st.session_state.get("style_profile_editor", st.session_state.get("style_profile", ""))
+        style_review_enabled = st.checkbox("원고 생성 후 레퍼런스 문체 기준으로 검수·보정 실행 (API 호출 추가)", value=True, key="style_review_enabled")
 
-party = st.radio("방문 인원", ["혼자", "2명", "3명", "4명", "5명 이상"], horizontal=True)
-menu = st.text_area("주문 메뉴", placeholder="예: 트러플 크림 파스타, 감바스, 아이스 아메리카노 2잔")
-reason = st.text_input("방문 계기", placeholder="예: 인스타에서 보고 가보고 싶었음 / 친구 생일")
-memo = st.text_area("추가로 기억나는 점", placeholder="예: 웨이팅 20분, 직원이 친절, 주차는 불편, 파스타 면이 쫄깃")
+    st.subheader("2. 방문 정보")
+    c1, c2, c3 = st.columns(3)
+    store = c1.text_input("업체명 (선택)")
+    region = c2.text_input("지역 (선택)", placeholder="예: 성수동")
+    keyword = c3.text_input("메인 키워드 (선택)", placeholder="예: 성수 파스타 맛집", help="제목에 넣을 핵심 문구를 입력하세요. 입력한 문구는 띄어쓰기까지 동일하게 본문에 5회 이상 반영합니다.")
+    seo1, seo2, seo3 = st.columns([2, 2, 2])
+    subkeywords = seo1.text_input("서브 키워드 (선택)", placeholder="예: 성수동 데이트, 성수 파스타")
+    content_type = seo2.selectbox("글 유형", ["자동 선택", "맛집", "카페", "피부과·뷰티", "방탈출·체험", "제품 리뷰", "여행·숙소", "기타"])
+    search_intent = seo3.selectbox("검색 의도", ["자동 선택", "방문 전 정보 탐색", "가격·메뉴 비교", "실제 방문 후기", "예약·이용 방법", "제품 구매 전 비교"])
 
-form = dict(store=store, region=region, keyword=keyword, subkeywords=subkeywords, content_type=content_type, search_intent=search_intent, party=party, menu=menu, reason=reason, memo=memo)
+    party = st.radio("방문 인원", ["혼자", "2명", "3명", "4명", "5명 이상"], horizontal=True)
+    menu = st.text_area("주문 메뉴", placeholder="예: 트러플 크림 파스타, 감바스, 아이스 아메리카노 2잔")
+    reason = st.text_input("방문 계기", placeholder="예: 인스타에서 보고 가보고 싶었음 / 친구 생일")
+    memo = st.text_area("추가로 기억나는 점", placeholder="예: 웨이팅 20분, 직원이 친절, 주차는 불편, 파스타 면이 쫄깃")
 
-st.subheader("원고 생성용 썸네일")
-st.caption("원고에 넣을 썸네일 문구와 이미지를 생성 전에 지정합니다. 결과 썸네일과 흰색 오버레이 배경은 원고 ZIP에 함께 담깁니다.")
-st.session_state.setdefault("generation_thumbnail_title", "")
-generation_thumbnail_title = st.text_input(
-    "썸네일 문구",
-    key="generation_thumbnail_title",
-    placeholder="비워 두면 자동 생성된 원고 제목 사용",
-    help="직접 입력하면 입력한 문구를 사용하고, 비워 두면 자동 생성된 원고 제목과 똑같이 만듭니다.",
-)
-generation_thumbnail_upload = st.file_uploader(
-    "원고용 썸네일 이미지",
-    type=["png", "jpg", "jpeg", "webp", "gif", "heic", "heif"],
-    accept_multiple_files=False,
-    key="generation_thumbnail_upload",
-    help="업로드하지 않으면 원고 사진 중 선택한 이미지를 사용합니다.",
-)
-generation_thumbnail_images = st.session_state.get("imgs", [])
-generation_thumbnail_options = [im["id"] for im in generation_thumbnail_images]
-generation_thumbnail_id = None
-if generation_thumbnail_options and generation_thumbnail_upload is None:
-    generation_thumbnail_id = st.selectbox(
-        "또는 원고 사진에서 선택",
-        generation_thumbnail_options,
-        format_func=lambda image_id: next((im["name"] for im in generation_thumbnail_images if im["id"] == image_id), image_id),
-        key="generation_thumbnail_image_id",
+    form = dict(store=store, region=region, keyword=keyword, subkeywords=subkeywords, content_type=content_type, search_intent=search_intent, party=party, menu=menu, reason=reason, memo=memo)
+
+    st.subheader("원고 생성용 썸네일")
+    st.caption("원고에 넣을 썸네일 문구와 이미지를 생성 전에 지정합니다. 결과 썸네일과 흰색 오버레이 배경은 원고 ZIP에 함께 담깁니다.")
+    st.session_state.setdefault("generation_thumbnail_title", "")
+    generation_thumbnail_title = st.text_input(
+        "썸네일 문구",
+        key="generation_thumbnail_title",
+        placeholder="비워 두면 자동 생성된 원고 제목 사용",
+        help="직접 입력하면 입력한 문구를 사용하고, 비워 두면 자동 생성된 원고 제목과 똑같이 만듭니다.",
     )
+    generation_thumbnail_upload = st.file_uploader(
+        "원고용 썸네일 이미지",
+        type=["png", "jpg", "jpeg", "webp", "gif", "heic", "heif"],
+        accept_multiple_files=False,
+        key="generation_thumbnail_upload",
+        help="업로드하지 않으면 원고 사진 중 선택한 이미지를 사용합니다.",
+    )
+    generation_thumbnail_images = st.session_state.get("imgs", [])
+    generation_thumbnail_options = [im["id"] for im in generation_thumbnail_images]
+    generation_thumbnail_id = None
+    if generation_thumbnail_options and generation_thumbnail_upload is None:
+        generation_thumbnail_id = st.selectbox(
+            "또는 원고 사진에서 선택",
+            generation_thumbnail_options,
+            format_func=lambda image_id: next((im["name"] for im in generation_thumbnail_images if im["id"] == image_id), image_id),
+            key="generation_thumbnail_image_id",
+        )
 
 
-def make_client(provider_name, key):
-    # 붙여넣기 시 앞뒤 공백/개행이 섞여 인증이 실패하는 경우를 방지합니다.
-    return {"provider": provider_name, "api_key": (key or "").strip()}
-def bind_status(live):
-    global LOG, TICK, WAIT
-    LOG = lambda m: st.write(m)
-    TICK = lambda n: live.caption(f"✍️ 응답 수신 중... {n:,}자")
-    WAIT = lambda sec: live.caption(f"⏳ 재시도 대기 중... {sec}초 남음")
+    def make_client(provider_name, key):
+        # 붙여넣기 시 앞뒤 공백/개행이 섞여 인증이 실패하는 경우를 방지합니다.
+        return {"provider": provider_name, "api_key": (key or "").strip()}
+    def bind_status(live):
+        global LOG, TICK, WAIT
+        LOG = lambda m: st.write(m)
+        TICK = lambda n: live.caption(f"✍️ 응답 수신 중... {n:,}자")
+        WAIT = lambda sec: live.caption(f"⏳ 재시도 대기 중... {sec}초 남음")
 
 
-if st.button("원고 생성", type="primary"):
-    if not api_key:
-        st.error(f"{key_label}을 입력해 주세요.")
-        st.stop()
-    if not model:
-        st.error("사용할 모델 ID를 입력해 주세요.")
-        st.stop()
-    if not menu.strip():
-        st.error("주문 메뉴를 입력해 주세요.")
-        st.stop()
-    client = make_client(provider, api_key)
-    t_start = time.time()
-
-    with st.status("원고 생성 중... (사진이 많으면 몇 분 걸릴 수 있어요. 아래 로그가 계속 올라오면 정상 진행 중입니다)", expanded=True) as status:
-        live = st.empty()
-        bind_status(live)
-
-        if "imgs" not in st.session_state:
-            LOG("📂 이미지 폴더를 읽고 크기를 줄이는 중...")
-            if uploaded_images:
-                st.session_state.imgs = load_uploaded_images(uploaded_images, crop_ratio)
-            else:
-                st.session_state.imgs = load_images(folder, crop_ratio) if folder.strip() else []
-            LOG(f"📂 사진 {len(st.session_state.imgs)}장 불러옴")
-        imgs = st.session_state.imgs
-        if not imgs:
-            st.warning(f"이미지를 찾지 못했습니다: {folder or '설정된 폴더 없음'}  (이미지 없이 텍스트만 작성합니다)")
-
-        if imgs:
-            cached_count = len(st.session_state.get("analysis", {}))
-            if cached_count:
-                LOG(f"♻️ 저장된 분석 결과 {cached_count}장 재사용")
-            try:
-                st.session_state.analysis = analyze_images(client, model, imgs)
-            except Exception as e:
-                st.error(f"이미지 분석이 중단됐습니다. 성공한 분석 결과는 저장되어 다음 실행에서 이어집니다.\n\n{e}")
-                st.stop()
-        analysis = st.session_state.get("analysis", {})
-
-        style_profile = active_style_profile
-        reference_blocks = build_ref_blocks(refs) if style_mode == "첨부 레퍼런스 문체" and refs else []
-        if style_mode == "첨부 레퍼런스 문체" and not reference_blocks and not style_profile.strip():
-            st.error("레퍼런스 문체를 사용하려면 원문 파일을 첨부하거나 저장된 문체 프로필을 준비해 주세요.")
+    if st.button("원고 생성", type="primary"):
+        if not api_key:
+            st.error(f"{key_label}을 입력해 주세요.")
             st.stop()
-        raw = generate(client, model, reference_blocks, form, analysis, style_profile=style_profile)
-        if style_profile.strip() and style_review_enabled:
-            raw = review_style(client, model, raw, style_profile)
-        live.empty()
-        result = parse(raw)
-        thumbnail_source = None
-        if generation_thumbnail_upload:
-            thumbnail_source = generation_thumbnail_upload.getvalue()
-        elif generation_thumbnail_id:
-            thumbnail_source = next((im["out"] for im in generation_thumbnail_images if im["id"] == generation_thumbnail_id), None)
-        if thumbnail_source:
-            try:
-                thumb_title = generation_thumbnail_title.strip() or result["title"]
-                white_background = make_white_overlay(thumbnail_source, THUMBNAIL_WHITE_OVERLAY_OPACITY)
-                thumbnail_png = make_thumbnail(thumbnail_source, thumb_title)
-                # Naver marker uses .jpg; encode actual JPEG bytes to match that extension.
-                with Image.open(io.BytesIO(thumbnail_png)) as thumb_image:
-                    jpeg_buffer = io.BytesIO()
-                    thumb_image.convert("RGB").save(jpeg_buffer, format="JPEG", quality=94, optimize=True)
-                filename_base = re.sub(r"[^가-힣A-Za-z0-9]+", "", keyword or store or region or "블로그")[:32] or "블로그"
-                thumbnail_filename = f"{filename_base}_썸네일.jpg"
-                background_filename = f"{filename_base}_썸네일_흰배경30.png"
-                st.session_state.generation_thumbnail_artifacts = {
-                    thumbnail_filename: jpeg_buffer.getvalue(),
-                    background_filename: white_background,
-                }
-                attach_generation_thumbnail_marker(result, form.get("store", ""))
-            except (OSError, ValueError, RuntimeError) as exc:
-                st.session_state.pop("generation_thumbnail_artifacts", None)
-                st.error(f"원고용 썸네일을 만들지 못했습니다: {exc}")
-        else:
-            st.session_state.pop("generation_thumbnail_artifacts", None)
-        st.session_state.result = result
-        st.session_state.form = form
-        st.session_state.refs_blocks = reference_blocks
-        st.session_state.style_mode_used = style_mode
-        st.session_state.style_profile_used = style_profile
-        status.update(label=f"완료! (총 {time.time() - t_start:.0f}초)", state="complete", expanded=False)
-
-res = st.session_state.get("result")
-st.divider()
-st.subheader("썸네일 만들기")
-st.caption("원고 생성과 별도로 썸네일을 만들 수 있습니다. 블로그 제목과 배경 이미지를 지정하세요.")
-thumbnail_title = st.text_input(
-    "블로그 제목 (썸네일 문구)",
-    value=res.get("title", "") if res else "",
-    key="standalone_thumbnail_title",
-)
-thumbnail_upload = st.file_uploader(
-    "썸네일용 이미지 업로드",
-    type=["png", "jpg", "jpeg", "webp", "gif", "heic", "heif"],
-    accept_multiple_files=False,
-    key="thumbnail_background_upload",
-    help="이미지를 업로드하면 썸네일과 흰색 오버레이 배경 이미지를 만듭니다.",
-)
-thumbnail_images = st.session_state.get("imgs", [])
-thumbnail_image_id = None
-if thumbnail_images and thumbnail_upload is None:
-    thumbnail_image_ids = [im["id"] for im in thumbnail_images]
-    thumbnail_image_id = st.selectbox(
-        "또는 원고 첨부 사진에서 선택",
-        thumbnail_image_ids,
-        format_func=lambda image_id: next((im["name"] for im in thumbnail_images if im["id"] == image_id), image_id),
-        key="thumbnail_image_id",
-    )
-if thumbnail_upload or thumbnail_image_id:
-    try:
-        if thumbnail_upload:
-            thumbnail_source = thumbnail_upload.getvalue()
-        else:
-            thumbnail_source = next(im["out"] for im in thumbnail_images if im["id"] == thumbnail_image_id)
-        white_overlay = make_white_overlay(thumbnail_source, THUMBNAIL_WHITE_OVERLAY_OPACITY)
-        thumbnail = make_thumbnail(thumbnail_source, thumbnail_title)
-        st.image(thumbnail, caption="600×500 · Pretendard Black · 흰색 오버레이 30%")
-        st.download_button("⬜ 흰색 오버레이 이미지 다운로드", white_overlay, "썸네일_배경_흰색30.png", "image/png", key="thumbnail_overlay_download")
-        st.download_button("🖼️ 썸네일 PNG 다운로드", thumbnail, "블로그_썸네일.png", "image/png", key="thumbnail_download")
-    except (OSError, ValueError, RuntimeError) as exc:
-        st.error(f"썸네일을 만들지 못했습니다: {exc}")
-else:
-    st.caption("이미지를 업로드하거나 원고 첨부 사진을 선택하면 썸네일이 생성됩니다.")
-
-if res:
-    analysis_by_id = st.session_state.get("analysis", {})
-    imgs_by_id = {
-        im["id"]: {**im, **analysis_by_id.get(im["id"], {})}
-        for im in st.session_state.get("imgs", [])
-    }
-    f = st.session_state.form
-    st.divider()
-    st.subheader("3. 결과")
-
-    left, right = st.columns([3, 2])
-    with left:
-        render_preview(res, imgs_by_id, f)
-    with right:
-        st.markdown("**사용한 키워드**")
-        st.write(res["keywords"] or "-")
-        body_chars = len(re.sub(r"\s|\[\[IMG_\d+\]\]", "", res["body"]))
-        st.metric("본문 글자 수(공백 제외)", f"{body_chars:,}")
-        used = used_ids(res["body"])
-        st.metric("배치된 사진", f"{len(used)} / {len(imgs_by_id)}")
-        seo_report = audit_blog_seo(res, f, imgs_by_id)
-        st.divider()
-        st.markdown("**네이버 SEO 발행 전 점검**")
-        st.metric("원고 점검 점수", f"{seo_report['score']} / 100", help="네이버의 공식 검색 순위 점수가 아니라, 프로젝트 내부의 원고 품질 체크 점수입니다.")
-        st.caption(f"메인 키워드 정확 일치: {seo_report['keyword_count']}회 · 키워드 포함 문단: {seo_report['keyword_paragraphs']}개 · 제목: {seo_report['title_length']}자")
-        with st.expander("SEO 점검 항목 자세히 보기", expanded=True):
-            for label, ok, weight, detail in seo_report["checks"]:
-                st.write(("✅ " if ok else "⚠️ ") + f"{label} ({weight}점) — {detail}")
-        with st.expander("제목 후보 보기"):
-            for title_candidate in suggest_title_patterns(f, res.get("title", "")):
-                st.write("• " + title_candidate)
-        skipped = [k for k in imgs_by_id if k not in used]
-        if skipped:
-            st.caption("미사용: " + ", ".join(skipped))
-        with st.expander("이미지 분석 결과"):
-            st.json(st.session_state.get("analysis", {}))
-
-        st.download_button("📦 네이버 업로드용 ZIP", build_naver_zip(res, imgs_by_id, f), "네이버_업로드용.zip", "application/zip", help="미리보기 순서에 맞춰 사진 번호를 붙이고, 메인 키워드와 사진 장면을 반영한 파일명으로 저장합니다.")
-        st.download_button("📦 원고+이미지 ZIP (전체)", build_zip(res, imgs_by_id, f), "blog_draft.zip", "application/zip")
-        st.download_button("📄 텍스트(.txt)", build_text(res, imgs_by_id, f), "원고.txt")
-        st.download_button("🌐 HTML(.html)", build_html(res, imgs_by_id, f), "원고.html", "text/html")
-        st.warning("미리보기 사진을 복사해 붙여넣으면 네이버 에디터의 사진 편집창이 열리지 않을 수 있습니다. ZIP을 풀고 원고.txt를 붙여넣은 뒤, [사진 NN] 위치마다 네이버 에디터의 사진 첨부 버튼으로 해당 번호의 사진을 직접 넣어주세요.")
-        st.caption("선택한 크롭 비율은 미리보기와 ZIP 사진에 적용됩니다. 크롭은 중앙 기준 자동 자르기이므로 가장자리의 사람·음식·간판 등이 잘릴 수 있어요. 중요한 피사체가 가장자리에 있으면 '원본 유지'를 선택하세요.")
-
-    st.subheader("수정 요청")
-    fb = st.text_input("예: 도입부를 더 짧게, 파스타 설명을 더 자세히, 아쉬운 점 추가")
-    if st.button("수정해서 다시 쓰기") and fb:
+        if not model:
+            st.error("사용할 모델 ID를 입력해 주세요.")
+            st.stop()
+        if not menu.strip():
+            st.error("주문 메뉴를 입력해 주세요.")
+            st.stop()
         client = make_client(provider, api_key)
-        with st.status("수정 중...", expanded=True) as status:
+        t_start = time.time()
+
+        with st.status("원고 생성 중... (사진이 많으면 몇 분 걸릴 수 있어요. 아래 로그가 계속 올라오면 정상 진행 중입니다)", expanded=True) as status:
             live = st.empty()
             bind_status(live)
-            style_profile = st.session_state.get("style_profile_used", DEFAULT_USER_STYLE_PROFILE)
-            raw = generate(client, model, st.session_state.refs_blocks, f, st.session_state.get("analysis", {}), style_profile=style_profile, prev=res["raw"], feedback=fb)
-            if style_profile.strip() and st.session_state.get("style_review_enabled", True):
+
+            if "imgs" not in st.session_state:
+                LOG("📂 이미지 폴더를 읽고 크기를 줄이는 중...")
+                if uploaded_images:
+                    st.session_state.imgs = load_uploaded_images(uploaded_images, crop_ratio)
+                else:
+                    st.session_state.imgs = load_images(folder, crop_ratio) if folder.strip() else []
+                LOG(f"📂 사진 {len(st.session_state.imgs)}장 불러옴")
+            imgs = st.session_state.imgs
+            if not imgs:
+                st.warning(f"이미지를 찾지 못했습니다: {folder or '설정된 폴더 없음'}  (이미지 없이 텍스트만 작성합니다)")
+
+            if imgs:
+                cached_count = len(st.session_state.get("analysis", {}))
+                if cached_count:
+                    LOG(f"♻️ 저장된 분석 결과 {cached_count}장 재사용")
+                try:
+                    st.session_state.analysis = analyze_images(client, model, imgs)
+                except Exception as e:
+                    st.error(f"이미지 분석이 중단됐습니다. 성공한 분석 결과는 저장되어 다음 실행에서 이어집니다.\n\n{e}")
+                    st.stop()
+            analysis = st.session_state.get("analysis", {})
+
+            style_profile = active_style_profile
+            reference_blocks = build_ref_blocks(refs) if style_mode == "첨부 레퍼런스 문체" and refs else []
+            if style_mode == "첨부 레퍼런스 문체" and not reference_blocks and not style_profile.strip():
+                st.error("레퍼런스 문체를 사용하려면 원문 파일을 첨부하거나 저장된 문체 프로필을 준비해 주세요.")
+                st.stop()
+            raw = generate(client, model, reference_blocks, form, analysis, style_profile=style_profile)
+            if style_profile.strip() and style_review_enabled:
                 raw = review_style(client, model, raw, style_profile)
             live.empty()
-            status.update(label="수정 완료", state="complete")
-        st.session_state.result = attach_generation_thumbnail_marker(parse(raw), f.get("store", ""))
-        st.rerun()
+            result = parse(raw)
+            thumbnail_source = None
+            if generation_thumbnail_upload:
+                thumbnail_source = generation_thumbnail_upload.getvalue()
+            elif generation_thumbnail_id:
+                thumbnail_source = next((im["out"] for im in generation_thumbnail_images if im["id"] == generation_thumbnail_id), None)
+            if thumbnail_source:
+                try:
+                    thumb_title = generation_thumbnail_title.strip() or result["title"]
+                    white_background = make_white_overlay(thumbnail_source, THUMBNAIL_WHITE_OVERLAY_OPACITY)
+                    thumbnail_png = make_thumbnail(thumbnail_source, thumb_title)
+                    # Naver marker uses .jpg; encode actual JPEG bytes to match that extension.
+                    with Image.open(io.BytesIO(thumbnail_png)) as thumb_image:
+                        jpeg_buffer = io.BytesIO()
+                        thumb_image.convert("RGB").save(jpeg_buffer, format="JPEG", quality=94, optimize=True)
+                    filename_base = re.sub(r"[^가-힣A-Za-z0-9]+", "", keyword or store or region or "블로그")[:32] or "블로그"
+                    thumbnail_filename = f"{filename_base}_썸네일.jpg"
+                    background_filename = f"{filename_base}_썸네일_흰배경30.png"
+                    st.session_state.generation_thumbnail_artifacts = {
+                        thumbnail_filename: jpeg_buffer.getvalue(),
+                        background_filename: white_background,
+                    }
+                    attach_generation_thumbnail_marker(result, form.get("store", ""))
+                except (OSError, ValueError, RuntimeError) as exc:
+                    st.session_state.pop("generation_thumbnail_artifacts", None)
+                    st.error(f"원고용 썸네일을 만들지 못했습니다: {exc}")
+            else:
+                st.session_state.pop("generation_thumbnail_artifacts", None)
+            st.session_state.result = result
+            st.session_state.form = form
+            st.session_state.refs_blocks = reference_blocks
+            st.session_state.style_mode_used = style_mode
+            st.session_state.style_profile_used = style_profile
+            status.update(label=f"완료! (총 {time.time() - t_start:.0f}초)", state="complete", expanded=False)
+
+    res = st.session_state.get("result")
+    st.divider()
+    st.subheader("썸네일 만들기")
+    st.caption("원고 생성과 별도로 썸네일을 만들 수 있습니다. 블로그 제목과 배경 이미지를 지정하세요.")
+    thumbnail_title = st.text_input(
+        "블로그 제목 (썸네일 문구)",
+        value=res.get("title", "") if res else "",
+        key="standalone_thumbnail_title",
+    )
+    thumbnail_upload = st.file_uploader(
+        "썸네일용 이미지 업로드",
+        type=["png", "jpg", "jpeg", "webp", "gif", "heic", "heif"],
+        accept_multiple_files=False,
+        key="thumbnail_background_upload",
+        help="이미지를 업로드하면 썸네일과 흰색 오버레이 배경 이미지를 만듭니다.",
+    )
+    thumbnail_images = st.session_state.get("imgs", [])
+    thumbnail_image_id = None
+    if thumbnail_images and thumbnail_upload is None:
+        thumbnail_image_ids = [im["id"] for im in thumbnail_images]
+        thumbnail_image_id = st.selectbox(
+            "또는 원고 첨부 사진에서 선택",
+            thumbnail_image_ids,
+            format_func=lambda image_id: next((im["name"] for im in thumbnail_images if im["id"] == image_id), image_id),
+            key="thumbnail_image_id",
+        )
+    if thumbnail_upload or thumbnail_image_id:
+        try:
+            if thumbnail_upload:
+                thumbnail_source = thumbnail_upload.getvalue()
+            else:
+                thumbnail_source = next(im["out"] for im in thumbnail_images if im["id"] == thumbnail_image_id)
+            white_overlay = make_white_overlay(thumbnail_source, THUMBNAIL_WHITE_OVERLAY_OPACITY)
+            thumbnail = make_thumbnail(thumbnail_source, thumbnail_title)
+            st.image(thumbnail, caption="600×500 · Pretendard Black · 흰색 오버레이 30%")
+            st.download_button("⬜ 흰색 오버레이 이미지 다운로드", white_overlay, "썸네일_배경_흰색30.png", "image/png", key="thumbnail_overlay_download")
+            st.download_button("🖼️ 썸네일 PNG 다운로드", thumbnail, "블로그_썸네일.png", "image/png", key="thumbnail_download")
+        except (OSError, ValueError, RuntimeError) as exc:
+            st.error(f"썸네일을 만들지 못했습니다: {exc}")
+    else:
+        st.caption("이미지를 업로드하거나 원고 첨부 사진을 선택하면 썸네일이 생성됩니다.")
+
+    if res:
+        analysis_by_id = st.session_state.get("analysis", {})
+        imgs_by_id = {
+            im["id"]: {**im, **analysis_by_id.get(im["id"], {})}
+            for im in st.session_state.get("imgs", [])
+        }
+        f = st.session_state.form
+        st.divider()
+        st.subheader("3. 결과")
+
+        left, right = st.columns([3, 2])
+        with left:
+            render_preview(res, imgs_by_id, f)
+        with right:
+            st.markdown("**사용한 키워드**")
+            st.write(res["keywords"] or "-")
+            body_chars = len(re.sub(r"\s|\[\[IMG_\d+\]\]", "", res["body"]))
+            st.metric("본문 글자 수(공백 제외)", f"{body_chars:,}")
+            used = used_ids(res["body"])
+            st.metric("배치된 사진", f"{len(used)} / {len(imgs_by_id)}")
+            seo_report = audit_blog_seo(res, f, imgs_by_id)
+            st.divider()
+            st.markdown("**네이버 SEO 발행 전 점검**")
+            st.metric("원고 점검 점수", f"{seo_report['score']} / 100", help="네이버의 공식 검색 순위 점수가 아니라, 프로젝트 내부의 원고 품질 체크 점수입니다.")
+            st.caption(f"메인 키워드 정확 일치: {seo_report['keyword_count']}회 · 키워드 포함 문단: {seo_report['keyword_paragraphs']}개 · 제목: {seo_report['title_length']}자")
+            with st.expander("SEO 점검 항목 자세히 보기", expanded=True):
+                for label, ok, weight, detail in seo_report["checks"]:
+                    st.write(("✅ " if ok else "⚠️ ") + f"{label} ({weight}점) — {detail}")
+            with st.expander("제목 후보 보기"):
+                for title_candidate in suggest_title_patterns(f, res.get("title", "")):
+                    st.write("• " + title_candidate)
+            skipped = [k for k in imgs_by_id if k not in used]
+            if skipped:
+                st.caption("미사용: " + ", ".join(skipped))
+            with st.expander("이미지 분석 결과"):
+                st.json(st.session_state.get("analysis", {}))
+
+            st.download_button("📦 네이버 업로드용 ZIP", build_naver_zip(res, imgs_by_id, f), "네이버_업로드용.zip", "application/zip", help="미리보기 순서에 맞춰 사진 번호를 붙이고, 메인 키워드와 사진 장면을 반영한 파일명으로 저장합니다.")
+            st.download_button("📦 원고+이미지 ZIP (전체)", build_zip(res, imgs_by_id, f), "blog_draft.zip", "application/zip")
+            st.download_button("📄 텍스트(.txt)", build_text(res, imgs_by_id, f), "원고.txt")
+            st.download_button("🌐 HTML(.html)", build_html(res, imgs_by_id, f), "원고.html", "text/html")
+            st.warning("미리보기 사진을 복사해 붙여넣으면 네이버 에디터의 사진 편집창이 열리지 않을 수 있습니다. ZIP을 풀고 원고.txt를 붙여넣은 뒤, [사진 NN] 위치마다 네이버 에디터의 사진 첨부 버튼으로 해당 번호의 사진을 직접 넣어주세요.")
+            st.caption("선택한 크롭 비율은 미리보기와 ZIP 사진에 적용됩니다. 크롭은 중앙 기준 자동 자르기이므로 가장자리의 사람·음식·간판 등이 잘릴 수 있어요. 중요한 피사체가 가장자리에 있으면 '원본 유지'를 선택하세요.")
+
+        st.subheader("수정 요청")
+        fb = st.text_input("예: 도입부를 더 짧게, 파스타 설명을 더 자세히, 아쉬운 점 추가")
+        if st.button("수정해서 다시 쓰기") and fb:
+            client = make_client(provider, api_key)
+            with st.status("수정 중...", expanded=True) as status:
+                live = st.empty()
+                bind_status(live)
+                style_profile = st.session_state.get("style_profile_used", DEFAULT_USER_STYLE_PROFILE)
+                raw = generate(client, model, st.session_state.refs_blocks, f, st.session_state.get("analysis", {}), style_profile=style_profile, prev=res["raw"], feedback=fb)
+                if style_profile.strip() and st.session_state.get("style_review_enabled", True):
+                    raw = review_style(client, model, raw, style_profile)
+                live.empty()
+                status.update(label="수정 완료", state="complete")
+            st.session_state.result = attach_generation_thumbnail_marker(parse(raw), f.get("store", ""))
+            st.rerun()
