@@ -1243,11 +1243,12 @@ form = dict(store=store, region=region, keyword=keyword, subkeywords=subkeywords
 
 st.subheader("원고 생성용 썸네일")
 st.caption("원고에 넣을 썸네일 문구와 이미지를 생성 전에 지정합니다. 결과 썸네일과 흰색 오버레이 배경은 원고 ZIP에 함께 담깁니다.")
+st.session_state.setdefault("generation_thumbnail_title", "")
 generation_thumbnail_title = st.text_input(
     "썸네일 문구",
-    value=st.session_state.get("generation_thumbnail_title", keyword or store or ""),
     key="generation_thumbnail_title",
-    help="비워 두면 생성된 블로그 제목을 썸네일 문구로 사용합니다.",
+    placeholder="비워 두면 자동 생성된 원고 제목 사용",
+    help="직접 입력하면 입력한 문구를 사용하고, 비워 두면 자동 생성된 원고 제목과 똑같이 만듭니다.",
 )
 generation_thumbnail_upload = st.file_uploader(
     "원고용 썸네일 이미지",
