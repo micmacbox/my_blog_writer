@@ -780,6 +780,9 @@ def parse(text: str):
 
     title = sec("TITLE")
     body = sec("BODY")
+    # 생성 모델이 제목을 본문 첫 줄에 중복 출력한 경우 본문에서는 제거합니다.
+    if title and body.splitlines() and body.splitlines()[0].strip() == title.strip():
+        body = "\n".join(body.splitlines()[1:]).lstrip()
     frame_quote = f"[프레임 인용구: {title}]" if title else ""
     if frame_quote and not body.startswith(frame_quote):
         body = f"{frame_quote}\n\n{body}".strip()
@@ -996,6 +999,7 @@ def build_zip(res, imgs_by_id, form):
         z.writestr("원고.html", build_html(res, imgs_by_id, form))
         for item in items:
             z.writestr(f"사진/{item['filename']}", item["image"]["out"])
+        add_generation_thumbnail(z)
     return buf.getvalue()
 
 
@@ -1007,7 +1011,24 @@ def build_naver_zip(res, imgs_by_id, form):
         z.writestr("원고.txt", build_text(res, imgs_by_id, form))
         for item in items:
             z.writestr(f"사진/{item['filename']}", item["image"]["out"])
+        add_generation_thumbnail(z)
     return buf.getvalue()
+
+
+def add_generation_thumbnail(archive):
+    artifacts = st.session_state.get("generation_thumbnail_artifacts") or {}
+    for filename, content in artifacts.items():
+        archive.writestr(f"사진/{filename}", content)
+
+
+def attach_generation_thumbnail_marker(result):
+    artifacts = st.session_state.get("generation_thumbnail_artifacts") or {}
+    thumbnail_filename = next((name for name in artifacts if name.endswith("_썸네일.jpg")), None)
+    if thumbnail_filename:
+        marker = f"[사진 썸네일 : {thumbnail_filename}]"
+        if marker not in result["body"]:
+            result["body"] = f"{marker}\n\n{result['body']}".strip()
+    return result
 
 
 def make_client(provider_name, key):
@@ -1213,6 +1234,32 @@ memo = st.text_area("추가로 기억나는 점", placeholder="예: 웨이팅 20
 
 form = dict(store=store, region=region, keyword=keyword, subkeywords=subkeywords, content_type=content_type, search_intent=search_intent, party=party, menu=menu, reason=reason, memo=memo)
 
+st.subheader("원고 생성용 썸네일")
+st.caption("원고에 넣을 썸네일 문구와 이미지를 생성 전에 지정합니다. 결과 썸네일과 흰색 오버레이 배경은 원고 ZIP에 함께 담깁니다.")
+generation_thumbnail_title = st.text_input(
+    "썸네일 문구",
+    value=st.session_state.get("generation_thumbnail_title", keyword or store or ""),
+    key="generation_thumbnail_title",
+    help="비워 두면 생성된 블로그 제목을 썸네일 문구로 사용합니다.",
+)
+generation_thumbnail_upload = st.file_uploader(
+    "원고용 썸네일 이미지",
+    type=["png", "jpg", "jpeg", "webp", "gif", "heic", "heif"],
+    accept_multiple_files=False,
+    key="generation_thumbnail_upload",
+    help="업로드하지 않으면 원고 사진 중 선택한 이미지를 사용합니다.",
+)
+generation_thumbnail_images = st.session_state.get("imgs", [])
+generation_thumbnail_options = [im["id"] for im in generation_thumbnail_images]
+generation_thumbnail_id = None
+if generation_thumbnail_options and generation_thumbnail_upload is None:
+    generation_thumbnail_id = st.selectbox(
+        "또는 원고 사진에서 선택",
+        generation_thumbnail_options,
+        format_func=lambda image_id: next((im["name"] for im in generation_thumbnail_images if im["id"] == image_id), image_id),
+        key="generation_thumbnail_image_id",
+    )
+
 
 def make_client(provider_name, key):
     # 붙여넣기 시 앞뒤 공백/개행이 섞여 인증이 실패하는 경우를 방지합니다.
@@ -1272,7 +1319,35 @@ if st.button("원고 생성", type="primary"):
         if style_profile.strip() and style_review_enabled:
             raw = review_style(client, model, raw, style_profile)
         live.empty()
-        st.session_state.result = parse(raw)
+        result = parse(raw)
+        thumbnail_source = None
+        if generation_thumbnail_upload:
+            thumbnail_source = generation_thumbnail_upload.getvalue()
+        elif generation_thumbnail_id:
+            thumbnail_source = next((im["out"] for im in generation_thumbnail_images if im["id"] == generation_thumbnail_id), None)
+        if thumbnail_source:
+            try:
+                thumb_title = generation_thumbnail_title.strip() or result["title"]
+                white_background = make_white_overlay(thumbnail_source, THUMBNAIL_WHITE_OVERLAY_OPACITY)
+                thumbnail_png = make_thumbnail(thumbnail_source, thumb_title)
+                # Naver marker uses .jpg; encode actual JPEG bytes to match that extension.
+                with Image.open(io.BytesIO(thumbnail_png)) as thumb_image:
+                    jpeg_buffer = io.BytesIO()
+                    thumb_image.convert("RGB").save(jpeg_buffer, format="JPEG", quality=94, optimize=True)
+                filename_base = re.sub(r"[^가-힣A-Za-z0-9]+", "", keyword or store or region or "블로그")[:32] or "블로그"
+                thumbnail_filename = f"{filename_base}_썸네일.jpg"
+                background_filename = f"{filename_base}_썸네일_흰배경30.png"
+                st.session_state.generation_thumbnail_artifacts = {
+                    thumbnail_filename: jpeg_buffer.getvalue(),
+                    background_filename: white_background,
+                }
+                attach_generation_thumbnail_marker(result)
+            except (OSError, ValueError, RuntimeError) as exc:
+                st.session_state.pop("generation_thumbnail_artifacts", None)
+                st.error(f"원고용 썸네일을 만들지 못했습니다: {exc}")
+        else:
+            st.session_state.pop("generation_thumbnail_artifacts", None)
+        st.session_state.result = result
         st.session_state.form = form
         st.session_state.refs_blocks = reference_blocks
         st.session_state.style_mode_used = style_mode
@@ -1378,5 +1453,5 @@ if res:
                 raw = review_style(client, model, raw, style_profile)
             live.empty()
             status.update(label="수정 완료", state="complete")
-        st.session_state.result = parse(raw)
+        st.session_state.result = attach_generation_thumbnail_marker(parse(raw))
         st.rerun()
