@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from .ai import AIError
-from .core import Evidence, KST, Window, deduplicate, food_related, group_candidates, rank_topics
+from .core import Evidence, KST, deduplicate, food_related, group_candidates, rank_topics
 from .sources import collect
 
 METHOD = (

@@ -4,7 +4,7 @@
 - 방문 정보 입력 + 이미지 폴더 분석
 - 네이버 SEO 형식 원고 + 이미지 배치
 
-실행:  streamlit run app_gemini.py
+실행:  streamlit run app.py
 """
 from __future__ import annotations
 
@@ -20,7 +20,6 @@ import requests
 import xml.etree.ElementTree as ET
 try:
     import cv2
-    import numpy as np
 except Exception as exc:
     raise RuntimeError(
         "얼굴 모자이크에 필요한 OpenCV를 불러오지 못했습니다. "
@@ -125,7 +124,12 @@ def crop_to_ratio(img: Image.Image, ratio: str) -> Image.Image:
 
 def to_jpeg(src, max_side: int, quality: int = 85, crop_ratio: str = "원본 유지") -> bytes:
     """경로 또는 bytes를 받아 첫 프레임을 JPEG로 변환합니다(API 분석용)."""
-    img = Image.open(src)
+    with Image.open(src) as img:
+        return to_jpeg_image(img, max_side, quality, crop_ratio)
+
+
+def to_jpeg_image(img: Image.Image, max_side: int, quality: int = 85, crop_ratio: str = "원본 유지") -> bytes:
+    """이미 열려 있는 PIL 이미지를 API 분석용 JPEG로 변환합니다."""
     img = ImageOps.exif_transpose(img).convert("RGB")
     img = crop_to_ratio(img, crop_ratio)
     img.thumbnail((max_side, max_side))
@@ -192,7 +196,12 @@ def process_output_image(path: Path, crop_ratio: str = "원본 유지"):
     """내보내기용 이미지 bytes, MIME, 확장자를 반환합니다. GIF는 애니메이션을 유지합니다."""
     if path.suffix.lower() == ".gif":
         return process_gif(path, 720, crop_ratio), "image/gif", ".gif"
-    image = Image.open(path)
+    with Image.open(path) as image:
+        return process_output_still(image, crop_ratio)
+
+
+def process_output_still(image: Image.Image, crop_ratio: str = "원본 유지"):
+    """열려 있는 정지 이미지를 서명·얼굴 모자이크가 포함된 출력 형식으로 변환합니다."""
     image = ImageOps.exif_transpose(image).convert("RGB")
     image = crop_to_ratio(image, crop_ratio)
     image.thumbnail((760, 760), Image.Resampling.LANCZOS)
@@ -223,12 +232,19 @@ def load_images(folder: str, crop_ratio: str = "원본 유지"):
     out = []
     for i, f in enumerate(files, 1):
         try:
-            out_bytes, out_mime, out_ext = process_output_image(f, crop_ratio)
+            if f.suffix.lower() == ".gif":
+                out_bytes, out_mime, out_ext = process_output_image(f, crop_ratio)
+                api_bytes = to_jpeg(f, 1280, quality=76)  # 분석용(첫 프레임)
+            else:
+                with Image.open(f) as image:
+                    image.load()
+                    api_bytes = to_jpeg_image(image, 1280, quality=76)
+                    out_bytes, out_mime, out_ext = process_output_still(image, crop_ratio)
             out.append(
                 {
                     "id": f"IMG_{i:02d}",
                     "name": f.name,
-                    "api": to_jpeg(f, 1280, quality=76),  # 분석용(첫 프레임, 용량 최적화)
+                    "api": api_bytes,  # 분석용(첫 프레임, 용량 최적화)
                     "out": out_bytes,  # 내보내기용; GIF 애니메이션 유지
                     "out_mime": out_mime,
                     "out_ext": out_ext,
@@ -248,18 +264,13 @@ def load_uploaded_images(uploaded_files, crop_ratio: str = "원본 유지"):
             suffix = Path(uploaded.name).suffix.lower()
             if suffix == ".gif":
                 output = process_gif(io.BytesIO(raw), 720, crop_ratio)
+                api_image = to_jpeg(io.BytesIO(raw), 1280, quality=76)
                 mime, ext = "image/gif", ".gif"
             else:
-                image = Image.open(io.BytesIO(raw))
-                image = ImageOps.exif_transpose(image).convert("RGB")
-                image = crop_to_ratio(image, crop_ratio)
-                image.thumbnail((760, 760), Image.Resampling.LANCZOS)
-                image = add_image_signature(mosaic_faces(image))
-                output_buf = io.BytesIO()
-                image.convert("RGB").save(output_buf, "JPEG", quality=78, optimize=True)
-                output = output_buf.getvalue()
-                mime, ext = "image/jpeg", ".jpg"
-            api_image = to_jpeg(io.BytesIO(raw), 1280, quality=76)
+                with Image.open(io.BytesIO(raw)) as image:
+                    image.load()
+                    api_image = to_jpeg_image(image, 1280, quality=76)
+                    output, mime, ext = process_output_still(image, crop_ratio)
             out.append({"id": f"IMG_{i:02d}", "name": uploaded.name, "api": api_image,
                         "out": output, "out_mime": mime, "out_ext": ext})
         except Exception as e:
@@ -1363,9 +1374,6 @@ with review_tab:
         )
 
 
-    def make_client(provider_name, key):
-        # 붙여넣기 시 앞뒤 공백/개행이 섞여 인증이 실패하는 경우를 방지합니다.
-        return {"provider": provider_name, "api_key": (key or "").strip()}
     def bind_status(live):
         global LOG, TICK, WAIT
         LOG = lambda m: st.write(m)
