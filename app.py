@@ -17,6 +17,7 @@ import os
 import re
 import zipfile
 import requests
+import xml.etree.ElementTree as ET
 try:
     import cv2
     import numpy as np
@@ -532,16 +533,16 @@ DEFAULT_USER_STYLE_PROFILE = """[기본 문체: 사용자가 제공한 네이버
 - 제목은 지역명이 있으면 대괄호 없이 '강남 훠궈 ...'처럼 지역명으로 시작하고, 검색 주제/메뉴·업체명·방문 후기 정보를 자연스럽게 잇는다. '[강남] 훠궈 ...'나 '[지역] ...'처럼 지역명을 대괄호로 감싸지 않는다. 지역 정보가 없으면 임의로 만들지 않는다.
 
 원고 구성 순서
-- 본문 도입/서론을 먼저 쓴 뒤 해시태그 한 줄을 배치하고, 바로 다음 줄에 [스티커: 내돈내산]을 둔다. 그 다음부터 사진과 경험을 이어간다.
+- 본문 도입/서론을 먼저 쓴다. 확인된 영업시간과 문의 번호가 있으면 도입부 바로 뒤에 일반 텍스트로 한 번만 소개한다. 하단에 영업시간을 반복하거나 '[인용: 영업시간]' 표식을 쓰지 않는다. 그 다음 해시태그 한 줄과 [스티커: 내돈내산]을 차례로 둔다.
 - 이용 팁 제목은 반드시 정확히 '[인용구: 이용 팁]', 총평 제목은 반드시 정확히 '[인용구: 총평]'으로 쓴다. 대괄호 안 문구는 바꾸지 않는다.
-- 본문 맨 아래에 [인용: 영업시간]을 쓰고, 바로 아래에 확인된 영업시간과 문의 전화번호를 배치한다. 예: '매일 10:30 - 22:00' 다음 줄에 '☎️문의 0507-1411-9922'. 확인되지 않은 값은 만들지 말고 '[확인 필요]'로 쓴다.
-- 모든 본문 내용의 최하단에는 [지도: 업체명]을 둔다. 업체명은 입력된 업체명을 그대로 사용한다.
+- 같은 블로그(fizz_report)의 실제 게시물 후보가 제공되면, 현재 지역과 같거나 가까운 지역의 맛집 글을 최대 2개 골라 본문 맨 끝에 '🎀 함께 보면 좋을 근처 맛집 🎀' 제목과 함께 추천한다. 추천은 제공된 후보의 제목과 URL만 그대로 사용하며, 적합한 후보가 없으면 섹션을 만들지 않는다.
+- [지도: 업체명]은 본문에서 이용 정보 다음에 둔다. 근처 맛집 추천이 있으면 지도 뒤에 추천 섹션을 붙여 본문을 마친다. 업체명은 입력된 값을 그대로 쓴다.
 
 후기 전개와 정보
 - 첫머리는 방문 계기나 첫인상을 짧고 편하게 꺼낸다. '오늘은 ~에 다녀왔습니다' 같은 정형적인 도입을 반복하지 말고, 사용자가 알려준 실제 상황에서 바로 시작한다.
 - 대표 사진과 짧은 소개 뒤에 외관·찾아가는 길·내부 분위기·메뉴판·주문 메뉴·먹거나 이용한 과정·이용 팁·총평을 사진 흐름에 맞춰 배치한다. 업종에 맞지 않는 항목은 빼고, 모든 글을 똑같은 순서로 만들지 않는다.
 - 메뉴판이나 가격표 사진이 있으면 주문 메뉴를 소개하기 전에 배치하고, 읽히는 메뉴명과 가격만 정확히 옮긴다. 음식·서비스의 맛, 질감, 변화, 양, 과정은 입력 정보나 이미지에서 뒷받침되는 만큼 구체적으로 쓴다.
-- 맛집 콘텐츠의 사진 본론은 반드시 '전체적인 가게 내부 및 첫인상 → 메뉴판(실제 이미지가 있는 경우) → 본메뉴' 순서로 구성한다. 외관·입구 사진은 첫인상 구간에 포함한다. 메뉴판 사진들이 시작되는 첫 이미지 마커 바로 위에 '[스티커: 메뉴판]'을 한 번 넣는다. 메뉴판 이미지가 없으면 해당 구간과 메뉴판 스티커를 모두 생략한다. 본메뉴 뒤에 먹는 과정과 사이드·후식·마무리를 이어간다. 도입/해시태그/내돈내산 스티커와 하단 이용 팁·총평·영업정보·지도 구성은 이 사진 본론의 앞뒤에 유지한다.
+- 맛집 콘텐츠의 사진 본론은 반드시 '전체적인 가게 내부 및 첫인상 → 메뉴판(실제 이미지가 있는 경우) → 본메뉴' 순서로 구성한다. 외관·입구 사진은 첫인상 구간에 포함한다. 메뉴판 사진들이 시작되는 첫 이미지 마커 바로 위에 '[스티커: 메뉴판]'을 한 번 넣는다. 메뉴판 이미지가 없으면 해당 구간과 메뉴판 스티커를 모두 생략한다. 본메뉴 뒤에 먹는 과정과 사이드·후식·마무리를 이어간다. 도입부 운영정보, 해시태그, 내돈내산 스티커, 이용 팁, 총평, 지도 및 선택적 근처 맛집 추천 순서를 유지한다.
 - 사진 마커 앞뒤 문장은 사진에 보이는 내용과 이어지게 한다. 같은 연결 문구를 사진마다 반복하지 않는다. 사진 설명은 실제로 보이는 범위를 넘지 않는다.
 - 예약, 주차, 웨이팅, 주문 방법, 운영시간처럼 재방문에 쓸 정보를 확인된 사실만 정리한다. 마지막 평가는 기억에 남은 점과 잘 맞을 방문자를 짧게 짚는다.
 - 가격, 위치, 운영시간, 직원 응대, 개인 경험은 입력 자료에 없으면 만들어내지 않는다. 장식 스티커는 실제 파일이 있을 때만 배치한다.
@@ -589,10 +590,11 @@ STYLE_REVIEW_SYSTEM = """너는 블로그 원고의 문체 일치도를 검수�
 - 흔한 AI식 문구, 과도하게 매끈한 광고체, 불필요한 요약/총평을 추가하지 않는다.
 - 사실, 메뉴, 가격, 주소, 방문 경험을 새로 만들거나 바꾸지 않는다.
 - 제목/본문/태그/키워드 구분자와 모든 [[IMG_XX]] 이미지 마커를 정확히 보존한다. 마커를 삭제·중복·재배치하지 않는다.
+- '[관련 맛집: 제목 | URL]' 추천이 있으면 추천 제목·URL·순서와 링크를 그대로 보존한다.
 - '[스티커: 메뉴판]'이 있으면 첫 메뉴판 이미지 바로 위 위치에 그대로 보존한다. 맛집의 내부·첫인상 → 메뉴판 → 본메뉴 구성도 문체 검수 중 변경하지 않는다.
 - 초안의 내용과 길이를 불필요하게 바꾸지 않고 문체만 보정한다.
-- 본문 구조를 도입/서론 → 해시태그 → [스티커: 내돈내산] → 나머지 본문과 사진 → '[인용구: 이용 팁]'과 확인된 이용 정보 → '[인용구: 총평]'과 총평 → [인용: 영업시간] → 영업시간 → 문의 번호 → [지도: 입력 업체명] 순서로 맞춘다. 두 인용구 제목의 문구는 반드시 고정한다. 해시태그는 ===TAGS===와 같게 유지한다.
-- 영업시간이나 전화번호는 원고의 입력 정보·사진에 확인되는 값만 쓰고, 모르면 '[확인 필요]'로 표시한다. 지도 마커의 업체명은 사용자가 입력한 업체명을 그대로 쓴다.
+- 본문 구조는 도입/서론 → 확인된 영업시간·문의(있을 때 도입부에 1회) → 해시태그 → [스티커: 내돈내산] → 나머지 본문과 사진 → '[인용구: 이용 팁]'과 이용 정보 → '[인용구: 총평]'과 총평 → [지도: 입력 업체명] → (해당할 때만) 근처 맛집 추천 순서로 맞춘다. 하단 '[인용: 영업시간]' 구역은 만들지 않는다. 두 인용구 제목의 문구는 반드시 고정한다. 해시태그는 ===TAGS===와 같게 유지한다.
+- 영업시간이나 전화번호는 원고 입력 정보·사진·제공된 네이버 지도 확인값만 사용하고, 모르면 '[확인 필요]'로 표시한다. 확인된 운영 정보는 도입부에 한 번만 두고 하단에서 반복하지 않는다. 지도 마커의 업체명은 사용자가 입력한 업체명을 그대로 쓴다. 추천 게시물은 제공된 제목·URL 후보에서만 최대 2개 선택하며 URL을 고치거나 만들어내지 않는다.
 - 아래 형식으로만 출력한다:
 ===TITLE===
 ...
@@ -627,9 +629,9 @@ WRITE_SYSTEM = """너는 네이버 블로그 맛집/장소 후기 전문 작가�
 - 문장 끝 마침표는 생략하는 편이며 짧은 문장도 문장마다 줄을 바꾼다. 물결표·감탄·이모티콘은 상황에 맞게 가끔 사용한다. 평가는 솔직하고 구체적으로 쓰며, 사진 아래 코멘트는 대체로 1~3줄로 쓴다.
 - 짧은 문장도 문장마다 줄을 바꾼다. 한 문장씩 줄을 나누되, 사진이나 화제가 바뀌는 지점에는 빈 줄을 두어 읽기 편하게 한다.
 - 정보는 분명히 전달하되 초안을 지나치게 매끈한 설명문으로 고치지 않는다. 사진을 보며 떠올린 짧은 반응과 감상은 사실에 맞게 살린다.
-- 본문 도입/서론 직후에 해시태그 한 줄과 [스티커: 내돈내산]을 차례로 배치한다. 본문 태그는 ===TAGS===와 동일해야 한다.
-- 이용 팁과 총평의 제목은 각각 '[인용구: 이용 팁]', '[인용구: 총평]'으로 고정한다. 대괄호 안 제목 문구를 임의로 요약하거나 바꾸지 않는다. 영업정보 부분은 [인용: 영업시간] 다음 줄에 확인된 영업시간과 문의 번호를 배치하고, 알 수 없는 값은 '[확인 필요]'라고 쓴다.
-- 원고의 마지막 줄은 [지도: 입력된 업체명]이다. 업체명은 방문 정보에 입력된 값을 그대로 쓴다.
+- 본문 도입/서론 직후에 확인된 영업시간·문의 정보를 일반 텍스트로 한 번만 배치하고, 이어 해시태그 한 줄과 [스티커: 내돈내산]을 둔다. 본문 태그는 ===TAGS===와 동일해야 한다.
+- 이용 팁과 총평의 제목은 각각 '[인용구: 이용 팁]', '[인용구: 총평]'으로 고정한다. 대괄호 안 제목 문구를 임의로 요약하거나 바꾸지 않는다. 확인된 영업시간과 문의 번호는 도입부에 일반 텍스트로 한 번만 쓰고 하단에 반복하지 않는다. 알 수 없는 값은 '[확인 필요]'라고 쓴다.
+- [지도: 입력된 업체명]은 이용 정보 뒤에 둔다. 제공된 추천 후보 중 현재 지역과 같거나 가까운 지역의 맛집 글이 있으면, 지도 뒤 본문 끝에 '🎀 함께 보면 좋을 근처 맛집 🎀' 제목과 함께 최대 2개를 추천한다. 추천 한 건은 '[관련 맛집: 게시물 제목 | 게시물 URL]' 형식으로 출력한다. 후보가 없으면 섹션을 만들지 않으며 제목·지역·URL을 추측하거나 새로 만들지 않는다.
 - 레퍼런스의 문장·내용을 그대로 복사하지 않는다. 스타일만 참고한다.
 
 [네이버 SEO]
@@ -665,6 +667,7 @@ WRITE_SYSTEM = """너는 네이버 블로그 맛집/장소 후기 전문 작가�
 (제목)
 ===BODY===
 (도입/서론)
+(확인된 영업시간·문의 — 도입부에 한 번만, 없으면 생략)
 #태그1 #태그2 ...
 [스티커: 내돈내산]
 (나머지 경험과 사진 마커)
@@ -672,10 +675,8 @@ WRITE_SYSTEM = """너는 네이버 블로그 맛집/장소 후기 전문 작가�
 (확인된 실용 정보)
 [인용구: 총평]
 (솔직한 최종 감상과 잘 맞는 방문자)
-[인용: 영업시간]
-(확인된 영업시간)
-☎️문의 (확인된 전화번호)
 [지도: 입력된 업체명]
+(선택: 🎀 함께 보면 좋을 근처 맛집 🎀 및 실제 후보 최대 2개)
 ===TAGS===
 #태그1 #태그2 ...
 ===KEYWORDS===
@@ -761,8 +762,33 @@ def build_ref_blocks(files):
     return blocks
 
 
-def generate(client, model, ref_blocks, form, analysis, style_profile="", prev=None, feedback=None):
+@st.cache_data(ttl=900, show_spinner=False)
+def fetch_related_blog_posts():
+    """Fetch public recent post titles and links from the owner's Naver Blog RSS feed."""
+    feed_url = "https://rss.blog.naver.com/fizz_report.xml?count=50"
+    try:
+        response = requests.get(feed_url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
+        response.raise_for_status()
+        root = ET.fromstring(response.content)
+    except (requests.RequestException, ET.ParseError, ValueError):
+        return []
+
+    posts = []
+    for item in root.findall(".//item"):
+        title = (item.findtext("title") or "").strip()
+        link = (item.findtext("link") or "").strip()
+        description = re.sub(r"<[^>]+>", " ", item.findtext("description") or "")
+        description = re.sub(r"\s+", " ", html.unescape(description)).strip()
+        if not title or not link or "blog.naver.com/fizz_report/" not in link:
+            continue
+        posts.append({"title": title, "url": link, "description": description[:500]})
+    return posts[:50]
+
+
+def generate(client, model, ref_blocks, form, analysis, style_profile="", prev=None, feedback=None, related_posts=None):
     usable = {k: v for k, v in analysis.items()}
+    related_posts = fetch_related_blog_posts() if related_posts is None else related_posts
+    related_text = json.dumps(related_posts, ensure_ascii=False, indent=1) if related_posts else "(실제 게시물 후보를 불러오지 못함 — 추천 섹션 생략)"
     info = f"""[방문 정보]
 - 업체명: {form['store'] or '(미입력 — 사진/메뉴판에서 확인되면 사용)'}
 - 지역: {form['region'] or '(미입력)'}
@@ -775,15 +801,51 @@ def generate(client, model, ref_blocks, form, analysis, style_profile="", prev=N
 - 방문 계기: {form['reason']}
 - 추가로 기억나는 점: {form['memo'] or '(없음)'}
 
+[운영 정보]
+- 확인된 영업시간·문의 번호가 있으면 도입부 바로 뒤에 일반 텍스트로 한 번만 배치한다. '[인용: 영업시간]' 표식과 하단 반복은 금지한다.
+
+[fizz_report 블로그의 실제 추천 후보 — 제목·URL을 그대로 사용]
+{related_text}
+
 [사진 분석표 — 촬영 순서대로]
 {json.dumps(list(usable.values()), ensure_ascii=False, indent=1)}"""
     content = list(ref_blocks)
     intro = "위 첨부는 문체를 참고할 레퍼런스 원문이다.\n\n" if ref_blocks else "(레퍼런스 없음 — 자연스러운 네이버 후기체로 작성)\n\n"
     profile_text = f"[사용자 지정 문체 프로필 — 반드시 우선 반영]\n{style_profile}\n\n" if style_profile and style_profile.strip() else "[문체 프로필 없음 — 첨부 레퍼런스의 문체를 직접 분석해 반영]\n\n"
-    content.append(profile_text + intro + info + "\n\n위 정보로 원고를 작성해라. 딱딱한 안내문이나 요약 보고서처럼 쓰지 말고, 사용자가 제공한 예시처럼 방문 상황과 사진을 따라가며 말하듯 친근하고 생생한 후기체로 작성해라. 사진 아래는 대체로 1~3줄로 쓰고 짧은 문장도 문장마다 줄을 바꿔라. 마침표는 생략하는 편으로 하되 자연스러운 해요체·구어체, 실제 감정에 맞는 가벼운 감탄을 활용해라. 맛과 서비스의 장단점을 제공된 사실에 맞게 구체적으로 담아라.")
+    content.append(profile_text + intro + info + "\n\n위 정보로 원고를 작성해라. 딱딱한 안내문이나 요약 보고서처럼 쓰지 말고, 사용자가 제공한 예시처럼 방문 상황과 사진을 따라가며 말하듯 친근하고 생생한 후기체로 작성해라. 사진 아래는 대체로 1~3줄로 쓰고 짧은 문장도 문장마다 줄을 바꿔라. 마침표는 생략하는 편으로 하되 자연스러운 해요체·구어체, 실제 감정에 맞는 가벼운 감탄을 활용해라. 맛과 서비스의 장단점을 제공된 사실에 맞게 구체적으로 담아라. 확인된 영업시간과 문의는 도입부에만 한 번 넣고 하단에 반복하지 마라. 추천 후보 중 지역이 같거나 가까운 실제 맛집 글이 있을 때만 최대 두 개를 골라 지정 형식으로 본문 맨 끝에 둬라.")
     if prev and feedback:
         content.append(f"[이전 초안]\n{prev}\n\n[수정 요청]\n{feedback}\n\n수정 요청을 반영해 전체 원고를 같은 형식으로 다시 출력해라.")
     return ask(client, model, WRITE_SYSTEM, content, label="원고 작성")
+
+
+def constrain_related_recommendations(result, related_posts):
+    """Keep at most two exact title/URL pairs from the public feed; discard invented links."""
+    valid = {(post["title"], post["url"]) for post in related_posts or []}
+    body_lines = (result.get("body") or "").splitlines()
+    heading = "🎀 함께 보면 좋을 근처 맛집 🎀"
+    found = []
+    pattern = re.compile(r"^\[관련 맛집:\s*(.*?)\s*\|\s*(https?://[^\]]+)\]$")
+    for line in body_lines:
+        match = pattern.fullmatch(line.strip())
+        if match:
+            pair = (match.group(1).strip(), match.group(2).strip())
+            if pair in valid and pair not in found:
+                found.append(pair)
+    found = found[:2]
+    map_index = next((i for i in range(len(body_lines) - 1, -1, -1)
+                      if re.fullmatch(r"\[지도:\s*.+\]", body_lines[i].strip())), None)
+    if map_index is not None:
+        filtered = body_lines[:map_index + 1]
+    else:
+        filtered = [line for line in body_lines
+                    if line.strip() != heading and not pattern.fullmatch(line.strip())]
+    while filtered and not filtered[-1].strip():
+        filtered.pop()
+    if found:
+        filtered.extend(["", heading])
+        filtered.extend(f"[관련 맛집: {title} | {url}]" for title, url in found)
+    result["body"] = "\n".join(filtered).strip()
+    return result
 
 
 def parse(text: str):
@@ -1348,11 +1410,13 @@ with review_tab:
             if style_mode == "첨부 레퍼런스 문체" and not reference_blocks and not style_profile.strip():
                 st.error("레퍼런스 문체를 사용하려면 원문 파일을 첨부하거나 저장된 문체 프로필을 준비해 주세요.")
                 st.stop()
-            raw = generate(client, model, reference_blocks, form, analysis, style_profile=style_profile)
+            related_posts = fetch_related_blog_posts()
+            LOG(f"🔎 fizz_report 최근 게시물 {len(related_posts)}개를 추천 후보로 확인했습니다" if related_posts else "ℹ️ fizz_report 게시물 피드를 불러오지 못해 근처 맛집 추천을 생략합니다")
+            raw = generate(client, model, reference_blocks, form, analysis, style_profile=style_profile, related_posts=related_posts)
             if style_profile.strip() and style_review_enabled:
                 raw = review_style(client, model, raw, style_profile)
             live.empty()
-            result = parse(raw)
+            result = constrain_related_recommendations(parse(raw), related_posts)
             thumbnail_source = None
             if generation_thumbnail_upload:
                 thumbnail_source = generation_thumbnail_upload.getvalue()
@@ -1481,10 +1545,12 @@ with review_tab:
                 live = st.empty()
                 bind_status(live)
                 style_profile = st.session_state.get("style_profile_used", DEFAULT_USER_STYLE_PROFILE)
-                raw = generate(client, model, st.session_state.refs_blocks, f, st.session_state.get("analysis", {}), style_profile=style_profile, prev=res["raw"], feedback=fb)
+                related_posts = fetch_related_blog_posts()
+                LOG(f"🔎 fizz_report 최근 게시물 {len(related_posts)}개를 추천 후보로 확인했습니다" if related_posts else "ℹ️ fizz_report 게시물 피드를 불러오지 못해 근처 맛집 추천을 생략합니다")
+                raw = generate(client, model, st.session_state.refs_blocks, f, st.session_state.get("analysis", {}), style_profile=style_profile, prev=res["raw"], feedback=fb, related_posts=related_posts)
                 if style_profile.strip() and st.session_state.get("style_review_enabled", True):
                     raw = review_style(client, model, raw, style_profile)
                 live.empty()
                 status.update(label="수정 완료", state="complete")
-            st.session_state.result = attach_generation_thumbnail_marker(parse(raw), f.get("store", ""))
+            st.session_state.result = attach_generation_thumbnail_marker(constrain_related_recommendations(parse(raw), related_posts), f.get("store", ""))
             st.rerun()
