@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from .ai import AIError
+from .guides import make_guide, render_guide
 from .core import Evidence, KST, deduplicate, food_related, group_candidates, rank_topics
 from .sources import collect
 
@@ -140,7 +141,7 @@ def create_drafts(report, top=5, writer=None, progress=None):
         title = (f"{topic.name}, 이번 주 공개 자료에서 살펴본 이야기" if topic.grouping != "headline"
                  else f"이번 주 음식 소식: {topic.name}")
         paragraphs = []
-        if writer and not report["demo"]:
+        if writer and not report["demo"] and not row.get("guide_type"):
             if progress:
                 progress(f"정보성 원고 작성 중 · {topic.name}")
             try:
@@ -177,7 +178,22 @@ def create_drafts(report, top=5, writer=None, progress=None):
                       source_footer(sources), "", "#주간푸드트렌드 #음식정보 #" + topic.category])
         if report["demo"]:
             lines[0:0] = ["[데모: 모든 상호·음식·링크는 테스트용 가상 자료입니다]", ""]
-        drafts.append({"topic": topic.name, "title": title, "mode": mode, "category": topic.category,
+        guide = None
+        if row.get("guide_type"):
+            topic.guide_type = row["guide_type"]
+            topic.base_source_id = row.get("base_source_id")
+            try:
+                guide = make_guide(topic, sources, writer if not report["demo"] else None)
+            except AIError as exc:
+                report["warnings"].append(f"{topic.name}: {exc}")
+                guide = make_guide(topic, sources)
+            title, practical_text = render_guide(topic.name, guide)
+            lines = [practical_text, "", source_footer(sources)]
+            if report["demo"]:
+                lines.insert(0, "[데모: 가상 자료입니다]")
+            mode = "실용 가이드 초안" if guide["complete"] else "자료 보완이 필요한 실용 가이드"
+            report["warnings"].extend(f"{topic.name}: {issue}" for issue in guide["issues"])
+        drafts.append({"guide": guide, "topic": topic.name, "title": title, "mode": mode, "category": topic.category,
                        "source_ids": list(topic.source_ids),
                        "text": "\n".join(lines),
                        "review": ["출처 원문 및 실제 방송·영상 내용 대조", "매장 지점·지역 일치 확인",
@@ -187,16 +203,22 @@ def create_drafts(report, top=5, writer=None, progress=None):
 
 
 def draft_text(report, draft, markdown=False):
-    lines = []
-    for image in report.get("images", []):
-        if image["topic"] != draft["topic"]:
-            continue
-        if markdown:
-            lines.append(f"![참고 이미지](../{image['filename']})")
+    text = draft["text"]
+    mode = (draft.get("guide") or {}).get("type")
+    targets = (["## 재료와 정확한 계량", "## 단계별 만드는 방법", "## 발효·굽기 온도와 시간"]
+               if mode == "recipe" else ["## 대표 메뉴와 가격", "## 어떤 곳인가요?"])
+    fallback = []
+    for n, image in enumerate(i for i in report.get("images", []) if i["topic"] == draft["topic"]):
+        marker = f"![참고 이미지](../{image['filename']})" if markdown else f"[사진 {image['number']:02d} : {image['filename']}]"
+        block = "\n\n" + marker + "\n" + image["caption"] + "\n이미지 출처: " + image["attribution"] + "\n\n"
+        target = targets[n % len(targets)]
+        if mode and target in text:
+            text = text.replace(target, target + block, 1)
         else:
-            lines.append(f"[사진 {image['number']:02d} : {image['filename']}]")
-        lines.extend([image["caption"], "이미지 출처: " + image["attribution"], ""])
-    return draft["text"].replace("## 출처", "## 참고 이미지\n\n" + "\n".join(lines) + "\n## 출처", 1) if lines else draft["text"]
+            fallback.append(block)
+    if fallback:
+        text = text.replace("## 출처", "## 참고 이미지\n" + "".join(fallback) + "\n## 출처", 1)
+    return text
 
 
 def export_files(report):

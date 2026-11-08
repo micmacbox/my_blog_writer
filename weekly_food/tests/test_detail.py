@@ -65,7 +65,7 @@ class DetailTests(unittest.TestCase):
         with patch("weekly_food.detail.collect", return_value=([related, unrelated], [])) as fetch, \
              patch("weekly_food.detail.background_info", return_value=[background]):
             result = build_selected_posts(self.report, [0], image_mode="none")
-        self.assertEqual(len(fetch.call_args.args[0]), 3)
+        self.assertTrue(any("계량" in q for q in fetch.call_args.args[0]))
         selected = result["selected_topics"][0]
         self.assertIn(related.id, selected["source_ids"])
         self.assertIn(background.id, selected["source_ids"])

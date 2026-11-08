@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from .core import Evidence, KST, Window, deduplicate, food_related, normalized
 from .media import generated_images, licensed_photos
 from .pipeline import create_drafts
+from .guides import resolve_type, detail_queries
 from .sources import Http, SourceError, collect
 
 
@@ -57,7 +58,9 @@ def build_selected_posts(report, selected, credentials=None, sources=None, write
     for index in selected:
         topic = copy.deepcopy(report["topics"][index])
         name = topic["name"]
-        search_term = options.get(index, {}).get("search", name).strip() or name
+        config = options.get(index, {})
+        topic["guide_type"] = resolve_type(topic["category"], config.get("guide_type"))
+        search_term = config.get("search", name).strip() or name
         if len(search_term) > 150:
             raise ValueError("추가 검색어는 150자 이하로 입력하세요.")
         if progress:
@@ -65,7 +68,7 @@ def build_selected_posts(report, selected, credentials=None, sources=None, write
         background = []
         added = []
         if not report["demo"]:
-            queries = [search_term, search_term + " 특징 재료", search_term + " 메뉴 방송"]
+            queries = detail_queries(search_term, topic["guide_type"])
             raw, status = collect(queries, window, credentials or {}, sources, limit, progress)
             result["detail_status"].extend({**s, "topic": name} for s in status)
             anchor = normalized(name)
@@ -76,10 +79,20 @@ def build_selected_posts(report, selected, credentials=None, sources=None, write
                 result["detail_status"].append({"topic": name, "source": "wikipedia", "state": "ok", "count": len(background)})
             except SourceError as exc:
                 result["detail_status"].append({"topic": name, "source": "wikipedia", "state": "error", "message": str(exc)})
+        provided = []
+        if config.get("reference_text", "").strip():
+            if not config.get("reference_url", "").strip():
+                raise ValueError(f"{name}: 참고 원문의 출처 URL을 입력하세요.")
+            provided = [Evidence(title=name + " 사용자 제공 참고 원문", url=config["reference_url"].strip(),
+                                 published_at=datetime.now(KST).isoformat(),
+                                 kind="recipe_source" if topic["guide_type"] == "recipe" else "venue_source",
+                                 publisher="사용자 제공 원문 (원문 대조 필요)", publisher_id="provided-reference",
+                                 summary=config["reference_text"][:20000], date_precision="retrieved")]
+        topic["base_source_id"] = provided[0].id if provided and topic["guide_type"] == "recipe" else config.get("base_source_id")
         original = [by_id[sid] for sid in topic["source_ids"]]
         combined = deduplicate(original + added, window)
         # Preserve the original weekly evidence even if detail_days is shorter.
-        combined_by_id = {s.id: s for s in original + combined + background}
+        combined_by_id = {s.id: s for s in original + combined + background + provided}
         by_id.update(combined_by_id)
         topic["source_ids"] = list(combined_by_id)
         topic["weekly_source_count"] = len(original)
@@ -108,7 +121,12 @@ def build_selected_posts(report, selected, credentials=None, sources=None, write
             if image_mode == "commons":
                 assets = licensed_photos(subject, name, image_count)
             else:
-                assets = generated_images(name, subject, image_key, image_model, image_count)
+                guide = draft.get("guide") or {}
+                fields = guide.get("fields", {})
+                scenes = [heading + ": " + " ".join(r["text"] for r in fields[key])
+                          for key, heading in [("ingredients", "재료"), ("steps", "성형·만들기 과정"), ("baking", "완성")]
+                          if fields.get(key)] if guide.get("type") == "recipe" else []
+                assets = generated_images(name, subject, image_key, image_model, image_count, scenes=scenes)
             result["images"].extend(assets)
             result["detail_status"].append({"topic": name, "source": "images", "state": "ok", "count": len(assets)})
             if len(assets) < image_count:

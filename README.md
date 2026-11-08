@@ -1,137 +1,57 @@
-# 네이버 블로그 후기 원고 작성기
+# 독립 블로그 작성 도구
 
-Streamlit 기반 블로그 후기 초안 작성 도구입니다. Gemini 또는 Groq 중 AI 제공자를 선택할 수 있고, 이미지 업로드·분석(지원 모델에 한함)·원고 생성·ZIP 내보내기를 지원합니다.
+이 저장소는 코드·실행 환경·의존성·인증을 공유하지 않는 두 프로젝트를 보관합니다.
+각 폴더를 그대로 다른 Git 저장소의 루트로 옮길 수 있습니다.
 
-## 주간 푸드 트렌드 정보성 원고
+| 프로젝트 | 용도 | 실행 파일 | 설정 비밀번호 |
+| --- | --- | --- | --- |
+| [review_writer](review_writer/README.md) | 방문 후기·사진·썸네일·네이버 원고 ZIP | `review_writer/app.py` | `BLOG_APP_PASSWORD` |
+| [weekly_food](weekly_food/README.md) | 주간 화제·추가 조사·레시피/식당 가이드·이미지 | `weekly_food/app.py` | `WEEKLY_FOOD_PASSWORD` |
 
-웹앱 상단의 **주간 푸드 트렌드** 탭에서 최근 7일의 맛집·디저트·음식·재료 소식을 수집하고, 출처를 붙인 정보성 초안을 만들 수 있습니다.
-공개 뉴스 RSS는 키 없이 사용할 수 있고, 네이버 검색·유튜브·Gemini/Groq 키를 설정하면 수집 범위와 원고 작성을 확장할 수 있습니다.
-**방문 후기 작성** 탭과 분리되어 있으며, API 설정도 각 탭 안에서 지정합니다.
-화제 목록을 먼저 확인한 뒤 여러 주제를 선택하면, 선택한 주제만 추가 조사해 원고를 만듭니다.
-이미지는 라이선스가 확인된 Wikimedia Commons 사진 또는 Gemini AI 이미지 중에서 선택하고, 원고·이미지·출처를 ZIP으로 내려받을 수 있습니다.
-
-```bash
-python3 -m weekly_food --demo          # 가상 자료로 시연
-python3 -m weekly_food --provider none --sources rss  # 실제 공개 뉴스 조사
-```
-
-앱 사용법, API 키, 매주 반복 실행, 결과 파일, 수집 범위는 [주간 푸드 트렌드 안내](WEEKLY_FOOD.md)를 참고하세요.
-
-## 로컬 실행
+## 원고 생성기
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
+cd review_writer
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-streamlit run app.py
+# .streamlit/secrets.example.toml을 secrets.toml로 복사하고 비밀번호·API 키 설정
+streamlit run app.py --server.port 8501
 ```
 
-브라우저에서 `http://localhost:8501`을 엽니다.
+## Weekly Food
 
-## 앱 접속 비밀번호
-
-원고 작성 화면은 로그인 후 사용할 수 있습니다. 비밀번호가 설정되지 않으면 앱은 잠긴 상태로 유지됩니다.
-
-Streamlit Community Cloud의 앱 **Settings → Secrets**에서 기존 API 키 설정에 다음 줄을 추가하고 저장합니다. 아래 예시 대신 본인만 아는 긴 비밀번호를 사용하세요.
-
-```toml
-BLOG_APP_PASSWORD = "여기에_본인만_아는_비밀번호"
-```
-
-로컬에서는 `.streamlit/secrets.toml`에 동일한 값을 넣거나 `BLOG_APP_PASSWORD` 환경변수를 설정합니다. 실제 비밀번호 파일은 Git에서 제외됩니다. 비밀번호를 채팅이나 저장소에 올리지 마세요.
-
-로그인은 브라우저 세션 동안 유지되며 사이드바에서 로그아웃할 수 있습니다. 로그아웃하면 해당 세션의 원고·사진·입력한 API 키 상태도 지워집니다. 비밀번호를 변경하면 기존 세션은 다음 실행 때 다시 로그인해야 합니다. 여러 사용자 계정이나 계정별 권한 기능은 제공하지 않습니다.
-
-코드를 배포한 뒤 Secrets를 설정해야 실제 배포 페이지에 적용됩니다. 로컬 파일 수정만으로 배포 페이지가 변경되지는 않습니다.
-
-## AI API 키 설정
-
-**방문 후기 작성** 탭의 **방문 후기 작성 설정**에서 키를 직접 입력하거나 환경변수로 설정할 수 있습니다.
-
-- `GEMINI_API_KEY`
-- `GROQ_API_KEY`
-
-Streamlit Community Cloud에서는 앱의 **Settings → Secrets**에 다음과 같이 입력합니다.
-
-```toml
-GEMINI_API_KEY = "발급받은 키"
-GROQ_API_KEY = "발급받은 키"
-```
-
-키가 포함된 `.env` 및 `.streamlit/secrets.toml`은 GitHub에 올리지 마세요.
-
-## 이미지 폴더 설정 (DEFAULT_FOLDER 대체)
-
-개인 PC 경로를 코드에 고정하지 않도록 기본 이미지 폴더를 다음 순서로 결정합니다.
-
-1. 환경변수 `BLOG_IMAGE_FOLDER`
-2. Streamlit Community Cloud의 App → Settings → Secrets에 지정한 `BLOG_IMAGE_FOLDER`
-3. 프로젝트 루트의 `images/` 폴더(존재하는 경우)
-4. 모두 없으면 빈 경로로 시작하며, 화면에서 사진을 직접 업로드할 수 있습니다.
-
-Secrets 설정 예시:
-
-```toml
-BLOG_IMAGE_FOLDER = "./images"
-```
-
-**Streamlit Community Cloud 주의:** 배포 앱은 사용자의 개인 PC 폴더에 접근할 수 없습니다. 고정 사진을 앱과 함께 배포하려면 저장소에 `images/` 폴더를 추가하고, 매번 다른 사진을 쓰려면 앱 화면의 사진 업로드를 사용하세요. Cloud 인스턴스의 로컬 파일 변경은 재시작·재배포 시 유지된다고 보장되지 않습니다.
-
-## 사진 처리 최적화
-
-얼굴 모자이크는 동봉된 OpenCV YuNet 모델로 감지합니다. 신뢰도 0.90 이상이면서 눈·코·입의 위치와 얼굴 크기·비율이 타당하고, 원본 크기와 축소 크기에서 같은 영역이 재확인된 경우만 가립니다. 음식·무늬에 자주 반응하던 Haar 정면/측면 탐지기는 사용하지 않습니다. 사진과 GIF 프레임 모두 동일한 기준을 적용합니다. 모델과 라이선스는 `assets/face_detection_yunet_2023mar.onnx`, `assets/YuNet-LICENSE.txt`에 포함되어 있으며 실행 중 다운로드하지 않습니다.
-
-이 기준은 오탐 감소를 우선하므로 작거나 가려진 얼굴, 옆얼굴을 놓칠 수 있습니다. 사진 속 인쇄된 얼굴·그림과 실제 사람을 완벽하게 구별하는 기능은 아니며, ZIP을 사용하기 전에 미리보기를 확인하세요. 이미 모자이크가 합쳐진 이미지에서는 원래 모습을 복구할 수 없으므로 원본 사진을 다시 불러와야 합니다.
-
-- AI 분석용 정지 이미지: 긴 변 최대 1,280px, JPEG 품질 76
-- ZIP/미리보기용 일반 이미지: 긴 변 최대 760px, JPEG 품질 78
-- GIF: 애니메이션 프레임 유지, 긴 변 최대 720px, 최적화 저장
-- 클라우드 배포 환경에서는 로컬 폴더 경로 대신 화면의 사진 업로드 기능을 사용합니다.
-
-원본보다 파일 크기가 줄어드는 정도는 사진의 해상도·형식·내용에 따라 다릅니다. GIF는 프레임 수가 많으면 여전히 클 수 있습니다.
-
-## 기본 원고 문체
-
-기본 문체는 제공된 네이버 블로그 게시물 캡처를 바탕으로 편한 1인칭 후기체, 짧은 모바일 문단, 사진 순서에 맞춘 경험 전개를 반영합니다. `~다`로 종결을 통일하지 않고 `~요`, `~어요`, `~더라고요`, `~같아요` 같은 친근한 말투와 담백한 서술형을 문맥에 맞게 섞습니다. 마침표 뒤에는 줄을 바꾸고, 긴 문장은 자연스러운 호흡으로 나눠 한 줄에 한 문장씩 배치합니다. 도입 뒤에 확인된 영업시간과 문의를 한 번 소개하고, 해시태그와 `[스티커: 내돈내산]`을 둡니다. 이용팁·총평은 `[인용: 문구]` 형식으로 표시하며 하단 영업시간 인용구는 만들지 않습니다. 공개 RSS에서 실제 게시물 후보를 가져올 수 있으면 같은 지역 또는 가까운 지역의 맛집 글을 최대 두 개 글 끝에 링크로 추천합니다. 자연스러운 구어체를 딱딱한 설명문으로 과하게 다듬거나 캡처 문구를 그대로 복사하지 않도록 설정되어 있습니다.
-
-## AI 제공자 참고
-
-Gemini는 `gemma-4-31b-it`, `gemini-3.1-flash-lite`, `gemini-3.6-flash` 중에서 선택할 수 있습니다. Groq은 모델 ID를 직접 입력합니다. Groq 모델은 텍스트 전용으로 처리하며, 사진은 ZIP에 포함되지만 사진 내용의 AI 분석은 건너뜁니다. 이미지 분석이 필요하면 Gemini를 선택하세요. Groq 연결 테스트는 API 키 인증뿐 아니라 입력한 모델로 실제 텍스트 생성 요청까지 확인합니다.
-
-## 배포 관련 중요 안내
-
-이 프로젝트는 **Streamlit 앱**입니다. GitHub 저장소에는 올릴 수 있지만, Vercel은 Streamlit의 상시 실행 서버를 그대로 호스팅하는 플랫폼이 아니므로 이 프로젝트를 Vercel에 바로 연결해 정상 배포할 수 없습니다.
-
-현재 코드를 유지하려면 GitHub 저장소를 **Streamlit Community Cloud**에 연결하는 방식이 가장 간단합니다. Vercel을 꼭 사용하려면 화면과 서버 구조를 Next.js 기반으로 재구성하는 별도 마이그레이션이 필요합니다.
-
-## GitHub 업로드
+별도 터미널과 별도 가상환경에서 실행합니다.
 
 ```bash
-git init
-git add .
-git commit -m "Prepare optimized Streamlit blog writer"
-git branch -M main
-git remote add origin https://github.com/계정명/저장소명.git
-git push -u origin main
+cd weekly_food
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+# .streamlit/secrets.example.toml을 secrets.toml로 복사하고 비밀번호·API 키 설정
+streamlit run app.py --server.port 8502
 ```
 
-## 기본 블로그 문체 및 네이버 SEO 규칙
-- 기본 문체는 사용자가 제공한 맛집/장소 후기 캡처의 사진 중심 전개와 자연스러운 구어체를 반영합니다.
-- 원고는 서론 → 본론 → 결론 순서이며, 결론 안의 이용팁과 총평은 각각 별도 소제목으로 출력합니다.
-- 음식점 원고는 메뉴판/가격표 사진을 음식 사진보다 먼저 배치합니다(해당 사진이 업로드된 경우).
-- 맛집 원고의 사진 본론은 내부·첫인상 → 메뉴판 이미지(있는 경우) → 본메뉴 순서로 생성합니다. 첫 메뉴판 이미지 위에 `[스티커: 메뉴판]`을 한 번 배치하고, 네이버 편집 작업에서는 실제 메뉴판 스티커로 변환합니다. 메뉴판 이미지가 없으면 해당 구간과 스티커를 생략합니다.
-- 메인 키워드를 입력하면 제목에 포함하고, 띄어쓰기와 철자까지 동일한 문구를 본문에 최소 5회 이상 분산해 사용하도록 작성 지침을 적용합니다.
+CLI도 Weekly Food 프로젝트 안에서 실행합니다.
 
-## SEO 작성 보조 기능
-- 메인 키워드 외에 서브 키워드를 입력하고, 글 유형과 검색 의도를 선택해 원고의 정보 구성을 구체화할 수 있습니다.
-- 생성 후 제목 키워드 포함 여부, 본문 정확 일치 키워드 횟수, 도입부 포함 여부, 문단별 분산, 요청한 글 구조, 해시태그 수, 문장 중복 의심, 사진 마커 등을 자동 점검합니다.
-- 제목 후보를 함께 제안합니다. 후보는 입력한 메인 키워드를 유지하는 문장 패턴이며, 검색량이나 실제 경쟁도를 측정한 결과는 아닙니다.
-- 점검 점수는 원고 작성 품질을 확인하기 위한 프로젝트 내부 체크리스트입니다. 네이버의 공식 점수·검색 순위 예측치가 아니며 상위 노출을 보장하지 않습니다.
-- 키워드 5회 규칙은 사용자가 설정한 작성 기준입니다. 네이버가 공개한 공식적인 반복 횟수 기준으로 표현하지 않습니다.
+```bash
+cd weekly_food
+python3 -m weekly_food --demo
+python3 -m unittest discover -s tests -v
+```
 
+## 저장소 분리와 배포
 
-## 로컬/배포 환경별 이미지 컨트롤 표시
+- `review_writer/` 또는 `weekly_food/`의 **내용 전체**를 새 저장소 루트로 복사하면 됩니다. 각 폴더에 실행 파일, 필요한 코드·자산, requirements.txt, README, 테스트, .gitignore, 설정 예제가 있습니다.
+- 형제 프로젝트, 공용 Python 모듈, 공용 비밀번호·세션·secrets.toml, 상위 디렉터리의 자산에 의존하지 않습니다.
+- 기존 통합 탭은 제거했습니다. 두 앱은 독립 서버/배포 주소로 사용하며 재시작과 배포도 각각 수행합니다.
+- 현재 저장소에서 새로 배포할 때 각 프로젝트의 `app.py`를 실행 파일로 지정합니다. 해당 프로젝트의 requirements.txt로 의존성을 설치하세요. 별도 저장소로 분리한 뒤에는 루트 `app.py`와 `requirements.txt`를 사용하면 됩니다.
+- 루트의 `app.py`, `requirements.txt`는 기존 원고 생성기 배포 경로를 위한 호환 진입점입니다. 원고 생성기만 실행하며 Weekly Food를 불러오지 않습니다. Weekly Food의 의존성은 별도로 설치해야 합니다.
+- 실제 비밀번호·API 키는 예제 파일에 넣지 마세요. 각 배포의 Secrets에 각각 설정하세요. 현재 루트의 기존 Secrets는 이동하거나 복사하지 않았습니다.
+- 기존 루트 `output/weekly_food/`의 생성 결과는 유지했습니다. 앞으로의 CLI 결과는 실행하는 Weekly Food 프로젝트의 `output/` 아래에 저장됩니다.
 
-- 로컬 실행: `이미지 폴더 경로 (선택)` 입력란과 `이미지 다시 읽기` 버튼이 표시됩니다.
-- Streamlit Community Cloud 배포: 두 컨트롤은 숨겨집니다. 사진 업로드 기능은 계속 사용할 수 있으며, 저장소에 포함된 `images/` 폴더도 기본 이미지 폴더로 사용할 수 있습니다.
-- 자동 판별이 필요한 환경에서는 `BLOG_APP_ENV=local` 또는 `BLOG_APP_ENV=cloud` 환경변수로 실행 모드를 명시할 수 있습니다. 일반적인 Streamlit Community Cloud의 `/mount/src` 앱 경로와 Cloud 환경변수도 판별에 사용합니다.
+루트에서 분리 경계 검증:
+
+```bash
+python3 -m unittest discover -s tests -v
+```

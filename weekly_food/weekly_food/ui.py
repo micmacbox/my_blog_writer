@@ -10,6 +10,7 @@ from weekly_food.ai import Writer
 from weekly_food.core import DEFAULT_QUERIES, KST, Window
 from weekly_food.pipeline import draft_text, research, zip_bytes
 from weekly_food.detail import build_selected_posts
+from weekly_food.guides import GUIDE_TYPES
 
 
 def setting(name, default=""):
@@ -124,7 +125,7 @@ def render_weekly_food():
             key=f"weekly_selected_{stamp}",
         )
         detail_days = st.number_input("추가 조사 기간 (일)", 1, 90, 30, key="weekly_detail_days")
-        st.caption("선택한 주제마다 검색어 3개로 다시 조회합니다. 기간은 주간 조사 종료 시점 기준이며, 백과사전 배경 자료의 확인일은 별도로 표시합니다.")
+        st.caption("선택한 글 유형에 맞춰 레시피·계량·공정 또는 지점·영업시간·예약·주차를 다시 조사합니다. 기간은 주간 조사 종료 시점 기준이며, 백과사전 배경 자료의 확인일은 별도로 표시합니다.")
         modes = {"공개 사진 가져오기 (라이선스 확인)": "commons", "AI 이미지 생성": "ai", "이미지 없음": "none"}
         image_mode = st.selectbox("이미지 준비 방식", list(modes), key="weekly_image_mode")
         image_count = st.number_input("주제별 이미지 수", 1, 3, 1, key="weekly_image_count")
@@ -139,15 +140,25 @@ def render_weekly_food():
             st.caption("Wikimedia Commons에서 CC BY·CC BY-SA·CC0·퍼블릭 도메인 라이선스가 확인된 사진만 받습니다. 해당 매장의 실제 사진으로 표시하지 않습니다.")
         topic_options = {}
         if chosen:
-            with st.expander("주제별 추가 검색어·이미지 내용 조정", expanded=False):
+            with st.expander("주제별 포스팅 유형·기준자료·이미지 설정", expanded=True):
                 for index in chosen[:10]:
                     name = report["topics"][index]["name"]
+                    guide_label = st.selectbox(f"{name} · 포스팅 유형", list(GUIDE_TYPES),
+                                               index=1 if report["topics"][index]["category"] == "맛집" else 0,
+                                               key=f"weekly_guide_type_{stamp}_{index}")
+                    reference_url = st.text_input(f"{name} · 기준 레시피/매장 안내 출처 URL (선택)",
+                                                  key=f"weekly_reference_url_{stamp}_{index}")
+                    reference_text = st.text_area(f"{name} · 기준 레시피 또는 매장 안내 원문 (선택)",
+                                                  key=f"weekly_reference_text_{stamp}_{index}",
+                                                  help="검색 요약에 없는 세부 정보는 원문으로 보강하세요. 레시피는 하나의 원문에 분량·계량·과정·온도·시간을 함께 넣으세요. URL만 입력하면 원문을 자동으로 읽지는 않습니다.",
+                                                  placeholder="재료: ...\n단계별 만드는 방법: ...\n또는 영업시간: ...\n예약: ...\n주차: ...")
                     search = st.text_input(f"{name} · 추가 검색어 (지점·지역 포함 가능)", value=name,
                                            key=f"weekly_detail_query_{stamp}_{index}")
                     subject = st.text_input(f"{name} · 이미지 검색어 또는 그릴 음식", value=name,
                                             key=f"weekly_image_subject_{stamp}_{index}",
                                             help="공개 사진은 영문 음식명으로도 검색해 보세요. 맛집 주제라면 대표 음식명을 입력하세요.")
-                    topic_options[index] = {"search": search, "image": subject}
+                    topic_options[index] = {"search": search, "image": subject, "guide_type": GUIDE_TYPES[guide_label],
+                                            "reference_url": reference_url, "reference_text": reference_text}
         if st.button("3. 선택 주제 추가 조사하고 원고·이미지 만들기", type="primary", key="weekly_build"):
             try:
                 writer = Writer(provider.lower(), ai_key, model) if provider != "근거 정리 (AI 없이)" and not report["demo"] else None
@@ -165,7 +176,7 @@ def render_weekly_food():
                     posts = generated
                     draft_metric.metric("생성 원고", len(posts["drafts"]))
                     current.empty()
-                    status.update(label=f"원고 {len(posts['drafts'])}개 · 이미지 {len(posts.get('images', []))}장 준비됨", state="complete")
+                    status.update(label=f"초안 {len(posts['drafts'])}개 · 이미지 {len(posts.get('images', []))}장 (항목별 확인 상태를 검토하세요)", state="complete")
                 for warning in posts["warnings"]:
                     st.warning(warning)
             except ValueError as exc:
@@ -184,6 +195,8 @@ def render_weekly_food():
                         st.image(base64.b64decode(image["data_base64"]), caption=image["caption"])
                         st.caption(image["attribution"])
                 st.download_button("원고 TXT 저장", text, f"주간_원고_{i:02d}.txt", key=f"weekly_txt_{i}")
+                if (draft.get("guide") or {}).get("missing"):
+                    st.warning("자료 보완 필요: " + " / ".join(draft["guide"]["missing"]))
                 st.caption("발행 전 확인: " + " / ".join(draft["review"]))
     with st.expander("전체 수집 자료·원문 링크"):
         st.dataframe([{"제목": s["title"], "출처": s["publisher"], "유형": s["kind"],

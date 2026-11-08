@@ -78,7 +78,7 @@ class Evidence:
 
     def __post_init__(self):
         self.title = clean(self.title)[:300]
-        self.summary = clean(self.summary)[:600]
+        self.summary = clean(self.summary)[:20000 if self.kind in {"recipe_source", "venue_source"} else 600]
         self.url = canonical_url(self.url)
         self.id = "S" + hashlib.sha256(self.url.encode()).hexdigest()[:12]
         self.views = max(0, int(self.views))
