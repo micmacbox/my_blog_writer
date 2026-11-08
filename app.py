@@ -594,7 +594,7 @@ STYLE_REVIEW_SYSTEM = """너는 블로그 원고의 문체 일치도를 검수�
 - '[스티커: 메뉴판]'이 있으면 첫 메뉴판 이미지 바로 위 위치에 그대로 보존한다. 맛집의 내부·첫인상 → 메뉴판 → 본메뉴 구성도 문체 검수 중 변경하지 않는다.
 - 초안의 내용과 길이를 불필요하게 바꾸지 않고 문체만 보정한다.
 - 본문 구조는 도입/서론 → 확인된 영업시간·문의(있을 때 도입부에 1회) → 해시태그 → [스티커: 내돈내산] → 나머지 본문과 사진 → '[인용구: 이용 팁]'과 이용 정보 → '[인용구: 총평]'과 총평 → [지도: 입력 업체명] → (해당할 때만) 근처 맛집 추천 순서로 맞춘다. 하단 '[인용: 영업시간]' 구역은 만들지 않는다. 두 인용구 제목의 문구는 반드시 고정한다. 해시태그는 ===TAGS===와 같게 유지한다.
-- 영업시간이나 전화번호는 원고 입력 정보·사진·제공된 네이버 지도 확인값만 사용하고, 모르면 '[확인 필요]'로 표시한다. 확인된 운영 정보는 도입부에 한 번만 두고 하단에서 반복하지 않는다. 지도 마커의 업체명은 사용자가 입력한 업체명을 그대로 쓴다. 추천 게시물은 제공된 제목·URL 후보에서만 최대 2개 선택하며 URL을 고치거나 만들어내지 않는다.
+- 영업시간이나 전화번호는 원고 입력 정보·사진·제공된 네이버 지도 확인값만 사용한다. 확인되지 않은 항목은 '영업시간: [확인 필요]'처럼 출력하지 말고 생략한다. 확인된 운영 정보는 도입부에 한 번만 두고 하단에서 반복하지 않는다. 지도 마커의 업체명은 사용자가 입력한 업체명을 그대로 쓴다. 추천 게시물은 제공된 제목·URL 후보에서만 최대 2개 선택하며 URL을 고치거나 만들어내지 않는다.
 - 아래 형식으로만 출력한다:
 ===TITLE===
 ...
@@ -630,7 +630,7 @@ WRITE_SYSTEM = """너는 네이버 블로그 맛집/장소 후기 전문 작가�
 - 짧은 문장도 문장마다 줄을 바꾼다. 한 문장씩 줄을 나누되, 사진이나 화제가 바뀌는 지점에는 빈 줄을 두어 읽기 편하게 한다.
 - 정보는 분명히 전달하되 초안을 지나치게 매끈한 설명문으로 고치지 않는다. 사진을 보며 떠올린 짧은 반응과 감상은 사실에 맞게 살린다.
 - 본문 도입/서론 직후에 확인된 영업시간·문의 정보를 일반 텍스트로 한 번만 배치하고, 이어 해시태그 한 줄과 [스티커: 내돈내산]을 둔다. 본문 태그는 ===TAGS===와 동일해야 한다.
-- 이용 팁과 총평의 제목은 각각 '[인용구: 이용 팁]', '[인용구: 총평]'으로 고정한다. 대괄호 안 제목 문구를 임의로 요약하거나 바꾸지 않는다. 확인된 영업시간과 문의 번호는 도입부에 일반 텍스트로 한 번만 쓰고 하단에 반복하지 않는다. 알 수 없는 값은 '[확인 필요]'라고 쓴다.
+- 이용 팁과 총평의 제목은 각각 '[인용구: 이용 팁]', '[인용구: 총평]'으로 고정한다. 대괄호 안 제목 문구를 임의로 요약하거나 바꾸지 않는다. 확인된 영업시간과 문의 번호는 도입부에 일반 텍스트로 한 번만 쓰고 하단에 반복하지 않는다. 확인되지 않은 운영 정보는 '[확인 필요]' 표기 대신 생략한다.
 - [지도: 입력된 업체명]은 이용 정보 뒤에 둔다. 제공된 추천 후보 중 현재 지역과 같거나 가까운 지역의 맛집 글이 있으면, 지도 뒤 본문 끝에 '🎀 함께 보면 좋을 근처 맛집 🎀' 제목과 함께 최대 2개를 추천한다. 추천 한 건은 '[관련 맛집: 게시물 제목 | 게시물 URL]' 형식으로 출력한다. 후보가 없으면 섹션을 만들지 않으며 제목·지역·URL을 추측하거나 새로 만들지 않는다.
 - 레퍼런스의 문장·내용을 그대로 복사하지 않는다. 스타일만 참고한다.
 
@@ -658,7 +658,7 @@ WRITE_SYSTEM = """너는 네이버 블로그 맛집/장소 후기 전문 작가�
 - 메뉴판 사진을 배치한 뒤에 메뉴명과 가격을 소개하고, 음식 사진에서는 비주얼·양·식감·맛 등 제공된 메모나 사진으로 뒷받침되는 부분만 서술한다.
 
 [사실 관계]
-- 주소·영업시간·전화·가격은 입력 정보나 사진에서 확인되는 것만 쓴다. 없으면 해당 항목은 "[확인 필요]"로 표시한다.
+- 주소·영업시간·전화·가격은 입력 정보나 사진에서 확인되는 것만 쓴다. 영업시간과 전화가 확인되지 않으면 해당 줄을 생략한다. 나머지 필수 정보 중 확인이 필요한 항목은 필요한 경우에만 '[확인 필요]'로 표시한다.
 - 방문 인원에 맞게 서술하되(혼자 / 2명 / 3명 / 4명 / 5명 이상) 동행자의 이름·관계를 지어내지 않는다. 사용자가 준 '기억나는 점'은 반드시 반영한다.
 - 공정위·협찬·기자단·체험단 표시 문구를 자동으로 만들거나 삽입하지 않는다.
 
@@ -770,8 +770,12 @@ def fetch_related_blog_posts():
         response = requests.get(feed_url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
         response.raise_for_status()
         root = ET.fromstring(response.content)
-    except (requests.RequestException, ET.ParseError, ValueError):
-        return []
+    except requests.RequestException as exc:
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+        detail = f"HTTP {status}: {exc}" if status else f"{type(exc).__name__}: {exc}"
+        return [], detail
+    except (ET.ParseError, ValueError) as exc:
+        return [], f"RSS XML 해석 실패: {exc}"
 
     posts = []
     for item in root.findall(".//item"):
@@ -782,12 +786,14 @@ def fetch_related_blog_posts():
         if not title or not link or "blog.naver.com/fizz_report/" not in link:
             continue
         posts.append({"title": title, "url": link, "description": description[:500]})
-    return posts[:50]
+    if not posts:
+        return [], "피드는 응답했지만 fizz_report 게시물 링크를 찾지 못했습니다"
+    return posts[:50], None
 
 
 def generate(client, model, ref_blocks, form, analysis, style_profile="", prev=None, feedback=None, related_posts=None):
     usable = {k: v for k, v in analysis.items()}
-    related_posts = fetch_related_blog_posts() if related_posts is None else related_posts
+    related_posts = fetch_related_blog_posts()[0] if related_posts is None else related_posts
     related_text = json.dumps(related_posts, ensure_ascii=False, indent=1) if related_posts else "(실제 게시물 후보를 불러오지 못함 — 추천 섹션 생략)"
     info = f"""[방문 정보]
 - 업체명: {form['store'] or '(미입력 — 사진/메뉴판에서 확인되면 사용)'}
@@ -1410,8 +1416,13 @@ with review_tab:
             if style_mode == "첨부 레퍼런스 문체" and not reference_blocks and not style_profile.strip():
                 st.error("레퍼런스 문체를 사용하려면 원문 파일을 첨부하거나 저장된 문체 프로필을 준비해 주세요.")
                 st.stop()
-            related_posts = fetch_related_blog_posts()
-            LOG(f"🔎 fizz_report 최근 게시물 {len(related_posts)}개를 추천 후보로 확인했습니다" if related_posts else "ℹ️ fizz_report 게시물 피드를 불러오지 못해 근처 맛집 추천을 생략합니다")
+            related_posts, related_posts_error = fetch_related_blog_posts()
+            st.session_state.related_posts_notice = related_posts_error
+            if related_posts_error:
+                LOG(f"⚠️ fizz_report RSS 가져오기 실패: {related_posts_error}")
+                LOG("ℹ️ 근처 맛집 추천을 생략합니다")
+            else:
+                LOG(f"🔎 fizz_report 최근 게시물 {len(related_posts)}개를 추천 후보로 확인했습니다")
             raw = generate(client, model, reference_blocks, form, analysis, style_profile=style_profile, related_posts=related_posts)
             if style_profile.strip() and style_review_enabled:
                 raw = review_style(client, model, raw, style_profile)
@@ -1502,6 +1513,8 @@ with review_tab:
         f = st.session_state.form
         st.divider()
         st.subheader("3. 결과")
+        if st.session_state.get("related_posts_notice"):
+            st.warning(f"근처 맛집 추천용 fizz_report RSS를 불러오지 못했습니다: {st.session_state.related_posts_notice}")
 
         left, right = st.columns([3, 2])
         with left:
@@ -1545,8 +1558,13 @@ with review_tab:
                 live = st.empty()
                 bind_status(live)
                 style_profile = st.session_state.get("style_profile_used", DEFAULT_USER_STYLE_PROFILE)
-                related_posts = fetch_related_blog_posts()
-                LOG(f"🔎 fizz_report 최근 게시물 {len(related_posts)}개를 추천 후보로 확인했습니다" if related_posts else "ℹ️ fizz_report 게시물 피드를 불러오지 못해 근처 맛집 추천을 생략합니다")
+                related_posts, related_posts_error = fetch_related_blog_posts()
+                st.session_state.related_posts_notice = related_posts_error
+                if related_posts_error:
+                    LOG(f"⚠️ fizz_report RSS 가져오기 실패: {related_posts_error}")
+                    LOG("ℹ️ 근처 맛집 추천을 생략합니다")
+                else:
+                    LOG(f"🔎 fizz_report 최근 게시물 {len(related_posts)}개를 추천 후보로 확인했습니다")
                 raw = generate(client, model, st.session_state.refs_blocks, f, st.session_state.get("analysis", {}), style_profile=style_profile, prev=res["raw"], feedback=fb, related_posts=related_posts)
                 if style_profile.strip() and st.session_state.get("style_review_enabled", True):
                     raw = review_style(client, model, raw, style_profile)
