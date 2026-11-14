@@ -937,11 +937,12 @@ def render_preview(res, imgs_by_id, form):
 
 
 def make_white_overlay(image_bytes: bytes, opacity: float = THUMBNAIL_WHITE_OVERLAY_OPACITY) -> bytes:
-    """이미지를 600×500으로 맞춘 뒤 지정한 투명도의 흰색 오버레이를 적용합니다."""
+    """원본 방향을 유지해 중앙 기준 1:1 크롭한 뒤 흰색 오버레이를 적용합니다."""
     with Image.open(io.BytesIO(image_bytes)) as source:
         if getattr(source, "is_animated", False):
             source.seek(0)
-        base = ImageOps.fit(source.convert("RGB"), (600, 500), method=Image.Resampling.LANCZOS).convert("RGBA")
+        oriented = ImageOps.exif_transpose(source).convert("RGB")
+        base = ImageOps.fit(oriented, (600, 600), method=Image.Resampling.LANCZOS).convert("RGBA")
 
     overlay = Image.new("RGBA", base.size, (255, 255, 255, round(255 * opacity)))
     canvas = Image.alpha_composite(base, overlay)
@@ -951,7 +952,7 @@ def make_white_overlay(image_bytes: bytes, opacity: float = THUMBNAIL_WHITE_OVER
 
 
 def make_thumbnail(image_bytes: bytes, title: str) -> bytes:
-    """사진에 흰색 70% 오버레이와 제목을 얹은 600×500 PNG를 만듭니다."""
+    """사진을 1:1 크롭해 흰색 오버레이와 제목을 얹은 600×600 PNG를 만듭니다."""
     overlay_bytes = make_white_overlay(image_bytes, THUMBNAIL_WHITE_OVERLAY_OPACITY)
     with Image.open(io.BytesIO(overlay_bytes)) as image:
         canvas = image.convert("RGBA")
@@ -1010,7 +1011,7 @@ def make_thumbnail(image_bytes: bytes, title: str) -> bytes:
     title = str(title or "").strip()
     if not title:
         raise ValueError("블로그 제목이 비어 있어 썸네일 문구를 만들 수 없습니다.")
-    max_width, max_height = 540, 330
+    max_width, max_height = 540, 396
     for size in range(54, 9, -2):
         font = load_font(size)
         lines = wrap_text(title, font, max_width)
@@ -1030,10 +1031,10 @@ def make_thumbnail(image_bytes: bytes, title: str) -> bytes:
         if len(lines) > 3:
             raise ValueError("제목이 너무 길어 썸네일 문구를 3줄 안에 표시할 수 없습니다. 제목을 줄여 주세요.")
 
-    y = (500 - total_height) / 2
+    y = (canvas.height - total_height) / 2
     for line, box, height in zip(lines, boxes, heights):
         width = box[2] - box[0]
-        draw.text(((600 - width) / 2 - box[0], y - box[1]), line, font=font,
+        draw.text(((canvas.width - width) / 2 - box[0], y - box[1]), line, font=font,
                   fill=(255, 255, 255, 255), stroke_width=max(2, size // 14),
                   stroke_fill=(20, 20, 20, 255))
         y += height + gap
@@ -1531,7 +1532,7 @@ if thumbnail_upload or thumbnail_image_id:
             thumbnail_source = next(im["out"] for im in thumbnail_images if im["id"] == thumbnail_image_id)
         white_overlay = make_white_overlay(thumbnail_source, THUMBNAIL_WHITE_OVERLAY_OPACITY)
         thumbnail = make_thumbnail(thumbnail_source, thumbnail_title)
-        st.image(thumbnail, caption="600×500 · Pretendard Black · 흰색 오버레이 30%")
+        st.image(thumbnail, caption="600×600 · 1:1 중앙 크롭 · Pretendard Black · 흰색 오버레이 30%")
         st.download_button("⬜ 흰색 오버레이 이미지 다운로드", white_overlay, "썸네일_배경_흰색30.png", "image/png", key="thumbnail_overlay_download")
         st.download_button("🖼️ 썸네일 PNG 다운로드", thumbnail, "블로그_썸네일.png", "image/png", key="thumbnail_download")
     except (OSError, ValueError, RuntimeError) as exc:
